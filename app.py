@@ -6,7 +6,7 @@ app = Flask(__name__)
 # Choose a strong secret password for verification
 VERIFY_TOKEN = "my_super_secret_token_123" 
 
-@app.route("/webhook", methods=["GET"])
+@app.route("/webhook", methods=["GET"], strict_slashes=False)
 def verify_webhook():
     """Handles the initial Meta verification handshake."""
     mode = request.args.get("hub.mode")
@@ -21,7 +21,7 @@ def verify_webhook():
             return "Forbidden", 403
     return "Missing parameters", 400
 
-@app.route("/webhook", methods=["POST"])
+@app.route("/webhook", methods=["POST"], strict_slashes=False)
 def receive_message():
     """Handles incoming WhatsApp messages from users."""
     body = request.json
