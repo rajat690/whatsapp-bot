@@ -7,7 +7,7 @@ app = Flask(__name__)
 # --- CONFIGURATION ---
 VERIFY_TOKEN = "my_super_secret_token_123" 
 ACCESS_TOKEN = "EAAPveWiYYE0BSWleZANUvoPEuRZCB2KU63FeZCeeUvCvsum2fcto0FbfomyGZB0ZBbnjLbrmIKbMDgm42fsttkbOC9SsBUSxmnZB79OsR08rQZCje39Xkev1Yk7Wr3LFWieqbRVENb0ZAarHp41tiSmXMI04r1RZBOUEygvxViK3HobL4755I55b8loQfOMBHHRJEkmn4nWn5J5BJm2EYqRrMa4ZARUUMnFJxCmOBrYNXJSAs5ocgOFp9d0rIBvm3TNoFtNGKLwP3x1VDdBwiIUZBydyvBCYEQ1pVcNiAZDZD"
-PHONE_NUMBER_ID = "1250032938200043"
+PHONE_NUMBER_ID = "123456123"
 
 @app.route("/webhook", methods=["GET"], strict_slashes=False)
 def verify_webhook():
