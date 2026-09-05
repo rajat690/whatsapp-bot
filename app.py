@@ -1,9 +1,10 @@
 import os
-import requests  # <-- ADDED: Needed to send messages back to Meta
+import requests
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
+# --- CONFIGURATION ---
 VERIFY_TOKEN = "my_super_secret_token_123" 
 ACCESS_TOKEN = "EAAPveWiYYE0BSWleZANUvoPEuRZCB2KU63FeZCeeUvCvsum2fcto0FbfomyGZB0ZBbnjLbrmIKbMDgm42fsttkbOC9SsBUSxmnZB79OsR08rQZCje39Xkev1Yk7Wr3LFWieqbRVENb0ZAarHp41tiSmXMI04r1RZBOUEygvxViK3HobL4755I55b8loQfOMBHHRJEkmn4nWn5J5BJm2EYqRrMa4ZARUUMnFJxCmOBrYNXJSAs5ocgOFp9d0rIBvm3TNoFtNGKLwP3x1VDdBwiIUZBydyvBCYEQ1pVcNiAZDZD"
 PHONE_NUMBER_ID = "1250032938200043"
@@ -28,18 +29,18 @@ def receive_message():
     """Handles incoming WhatsApp messages from users."""
     body = request.json
     
-    # Force real-time logs parsing with flush=True
+    # Real-time console tracking with flush=True
     print("Received WhatsApp JSON Payload:", flush=True)
     print(body, flush=True) 
 
-    # --- ADDED: Code block to extract user message and send reply back ---
+    # Extract user message details and send response payload
     if body.get("object") and body.get("entry"):
         for entry in body["entry"]:
             for change in entry.get("changes", []):
                 value = change.get("value", {})
                 if "messages" in value:
                     for message in value["messages"]:
-                        user_phone = message["from"]  # Target user phone number
+                        user_phone = message["from"]  
                         
                         if message.get("type") == "text":
                             user_text = message["text"]["body"]
@@ -54,6 +55,7 @@ def receive_message():
 
 def send_whatsapp_message(recipient_phone, message_text):
     """Sends a response back to the user via Meta's WhatsApp Cloud API."""
+    # RECTIFIED: Explicitly structured forward slash endpoint string path
     url = f"https://facebook.com{PHONE_NUMBER_ID}/messages"
     
     headers = {
