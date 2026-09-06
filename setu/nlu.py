@@ -26,13 +26,23 @@ MENU_MAP = {
     "myself": "Individual Schemes",
     "for me": "Individual Schemes",
     "personal": "Individual Schemes",
+    "vyaktigat": "Individual Schemes",
+    "vyakti": "Individual Schemes",
+    "व्यक्तिगत": "Individual Schemes",
+    "वैयक्तिक": "Individual Schemes",
     "family schemes": "Family Schemes",
     "family": "Family Schemes",
     "household": "Family Schemes",
+    "kutumb": "Family Schemes",
+    "kutumba": "Family Schemes",
+    "परिवार": "Family Schemes",
+    "कुटुंब": "Family Schemes",
     "i need help": "I need help",
     "need help": "I need help",
     "help": "I need help",
     "support": "I need help",
+    "मदत": "I need help",
+    "मदद": "I need help",
 }
 
 AGE_MAP = {
@@ -221,18 +231,88 @@ def _map_alias(text: str, aliases: dict[str, str]) -> str | None:
     return None
 
 
+_NATIVE_LANGUAGE_NAMES = {
+    "हिंदी": "Hindi",
+    "हिन्दी": "Hindi",
+    "मराठी": "Marathi",
+    "ಕನ್ನಡ": "Kannada",
+    "अंग्रेजी": "English",
+    "इंग्रजी": "English",
+    "ಇಂಗ್ಲಿಷ್": "English",
+    "ಇಂಗ್ಲೀಷ್": "English",
+}
+
+_FULL_LANGUAGE_KEYS = ("english", "hindi", "marathi", "kannada")
+
+_SWITCH_INTENT = re.compile(
+    r"\b(switch|language|speak|talk|continue|reply|respond|change)\b",
+    re.I,
+)
+_SWITCH_TO_LANG = re.compile(
+    r"\b(?:switch|change|continue|talk|speak|reply|respond|use)"
+    r"(?:\s+\w+){0,3}\s+(?:to|in|into)\s+"
+    r"(english|hindi|marathi|kannada)\b",
+    re.I,
+)
+_IN_TO_LANG = re.compile(r"\b(?:in|to|into)\s+(english|hindi|marathi|kannada)\b", re.I)
+
+
 def detect_language(text: str) -> str | None:
     n = _norm(text)
     if n in LANGUAGE_MAP:
         return LANGUAGE_MAP[n]
+    for native, val in _NATIVE_LANGUAGE_NAMES.items():
+        if native in text:
+            return val
     for key, val in sorted(LANGUAGE_MAP.items(), key=lambda kv: -len(kv[0])):
         if _contains_phrase(n, key):
             return val
     return None
 
 
+def detect_language_switch(text: str) -> str | None:
+    """Detect an explicit mid-flow language change.
+
+    Bare language names count. Short codes (en/hi) only match as the whole message
+    so they do not fire inside ordinary answers.
+    """
+    n = _norm(text)
+    if not n:
+        return None
+    if n in LANGUAGE_MAP:
+        return LANGUAGE_MAP[n]
+    for native, val in _NATIVE_LANGUAGE_NAMES.items():
+        if text.strip() == native:
+            return val
+
+    m = _SWITCH_TO_LANG.search(n)
+    if m:
+        return LANGUAGE_MAP[m.group(1).lower()]
+    m = _IN_TO_LANG.search(n)
+    if m and (_SWITCH_INTENT.search(n) or "back" in n):
+        return LANGUAGE_MAP[m.group(1).lower()]
+
+    has_intent = bool(_SWITCH_INTENT.search(n)) or any(
+        p in text for p in ("भाषा", "में बात", "मध्ये", "ಮಾತನಾಡ")
+    )
+    if has_intent:
+        for native, val in _NATIVE_LANGUAGE_NAMES.items():
+            if native in text:
+                return val
+        for key in _FULL_LANGUAGE_KEYS:
+            if _contains_phrase(n, key):
+                return LANGUAGE_MAP[key]
+    return None
+
+
 def detect_menu(text: str) -> str | None:
     n = _norm(text)
+    if n in ("1", "1)"):
+        return "Individual Schemes"
+    if n in ("2", "2)"):
+        return "Family Schemes"
+    if n in ("3", "3)"):
+        return "I need help"
     for key, val in sorted(MENU_MAP.items(), key=lambda kv: -len(kv[0])):
         if n == key or _contains_phrase(n, key):
             return val

@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from . import eligibility, llm, nlu
+from . import eligibility, i18n, llm, nlu
 from .session import get_session, reset_session
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -46,8 +46,27 @@ PROFILE_LABELS = {
 SYSTEM_PERSONA = """You are SETU, a warm WhatsApp assistant that helps people in India discover government schemes.
 Style: short, natural chat messages (2-5 sentences max). No markdown tables. Light WhatsApp formatting (*bold*) sparingly.
 You may ask clarifying questions. Never invent scheme eligibility — the app will run a deterministic matcher.
-Languages: greet/accept English, Hindi, Marathi, Kannada; reply in the user's chosen language when possible, otherwise English.
+Languages: greet/accept English, Hindi, Marathi, Kannada.
+Always reply in the session language. Never revert to an earlier language.
+During profile collection ask EXACTLY ONE outstanding slot per turn. Never list or combine remaining questions.
 """
+
+
+def _lang(session: dict[str, Any] | None = None, language: str | None = None) -> str:
+    if language:
+        return i18n.normalize_language(language)
+    if session:
+        return i18n.normalize_language(session.get("language"))
+    return "English"
+
+
+def _apply_language_switch(session: dict[str, Any], text: str) -> str | None:
+    """Persist a mid-flow language change. Returns the new language or None."""
+    new_lang = nlu.detect_language_switch(text)
+    if new_lang and new_lang != session.get("language"):
+        session["language"] = new_lang
+        return new_lang
+    return None
 
 
 def load_journey(journey_id: str | None = None) -> dict[str, Any]:
@@ -64,20 +83,26 @@ def _missing_slots(journey: dict[str, Any], slots: dict[str, str]) -> list[dict[
     return missing
 
 
-def _profile_summary(slots: dict[str, str], journey_id: str | None = None) -> str:
+def _profile_summary(
+    slots: dict[str, str],
+    journey_id: str | None = None,
+    language: str | None = None,
+) -> str:
     labels = PROFILE_LABELS.get(journey_id or "journey_1", PROFILE_LABELS["journey_1"])
-    lines = ["Here’s what I have so far:"]
-    for key, label in labels.items():
-        lines.append(f"• {label}: {slots.get(key, '—')}")
+    lang = _lang(language=language)
+    lines = [i18n.t("profile_header", lang)]
+    for key, fallback in labels.items():
+        lines.append(f"• {i18n.profile_label(key, lang, fallback)}: {slots.get(key, '—')}")
     lines.append("")
-    lines.append("Does this look right? Reply *Proceed* or *Edit details*.")
+    lines.append(i18n.t("profile_confirm", lang))
     return "\n".join(lines)
 
 
-def _after_detail_prompt(journey_id: str | None) -> str:
+def _after_detail_prompt(journey_id: str | None, language: str | None = None) -> str:
+    lang = _lang(language=language)
     if journey_id == "journey_2":
-        return "Reply *I need help* or *Go Back* to the list."
-    return "Reply *help* for support, or *other schemes* to go back to the list."
+        return i18n.t("after_detail_j2", lang)
+    return i18n.t("after_detail_j1", lang)
 
 
 def _start_journey(session: dict[str, Any], journey_id: str) -> dict[str, Any]:
@@ -89,12 +114,36 @@ def _start_journey(session: dict[str, Any], journey_id: str) -> dict[str, Any]:
     return load_journey(journey_id)
 
 
-def _ask_slot(slot: dict[str, Any]) -> str:
-    hint = slot.get("prompt_hint") or f"Please share your {slot['id']}."
+def _ask_slot(slot: dict[str, Any], language: str | None = None) -> str:
+    lang = _lang(language=language)
+    hint = i18n.slot_prompt(slot["id"], lang, slot.get("prompt_hint"))
     options = slot.get("options")
     if options:
-        return f"{hint}\n(You can reply in your own words. Examples: {', '.join(options[:5])}…)"
-    return f"{hint}\n(You can reply in your own words.)"
+        return f"{hint}\n{i18n.t('reply_examples', lang, examples=', '.join(options[:5]))}"
+    return f"{hint}\n{i18n.t('reply_own_words', lang)}"
+
+
+def _one_slot_reply(
+    session: dict[str, Any],
+    missing_after: list[dict[str, Any]],
+    llm_reply: str | None = None,
+    switched_to: str | None = None,
+) -> str:
+    """Ask exactly one outstanding slot, ignoring multi-question LLM dumps."""
+    lang = _lang(session)
+    next_q = _ask_slot(missing_after[0], lang)
+    reply = (llm_reply or "").strip()
+    if (
+        reply
+        and i18n.reply_matches_language(reply, lang)
+        and not i18n.is_multi_slot_prompt(reply, missing_after)
+    ):
+        return reply
+    parts: list[str] = []
+    if switched_to:
+        parts.append(i18n.t("language_switch_ack", lang))
+    parts.append(next_q)
+    return "\n\n".join(parts)
 
 
 def _welcome() -> str:
@@ -106,14 +155,8 @@ def _welcome() -> str:
     )
 
 
-def _main_menu() -> str:
-    return (
-        "What would you like to explore today?\n"
-        "• Individual Schemes\n"
-        "• Family Schemes\n"
-        "• I need help\n\n"
-        "Just type your choice in your own words."
-    )
+def _main_menu(language: str | None = None) -> str:
+    return i18n.t("main_menu", language)
 
 
 def _slot_schema(journey: dict[str, Any]) -> str:
@@ -164,7 +207,12 @@ def _merge_llm_slots(raw: dict[str, Any], allowed: set[str]) -> dict[str, str]:
     return out
 
 
-def _conversational_collect(session: dict[str, Any], journey: dict[str, Any], text: str) -> str | None:
+def _conversational_collect(
+    session: dict[str, Any],
+    journey: dict[str, Any],
+    text: str,
+    switched_to: str | None = None,
+) -> str | None:
     """LLM-powered profile collection. Returns reply or None to fall back."""
     if not llm.llm_configured():
         return None
@@ -175,6 +223,7 @@ def _conversational_collect(session: dict[str, Any], journey: dict[str, Any], te
 
     journey_id = session.get("journey_id") or "journey_1"
     journey_label = "Family Schemes" if journey_id == "journey_2" else "Individual Schemes"
+    next_id = missing_ids[0] if missing_ids else None
     count_note = ""
     if journey_id == "journey_2":
         count_note = (
@@ -186,14 +235,19 @@ def _conversational_collect(session: dict[str, Any], journey: dict[str, Any], te
 
     system = (
         SYSTEM_PERSONA
+        + i18n.language_instruction(session.get("language"))
         + f"\nYou are collecting a short eligibility profile for {journey_label}.\n"
         + "Return ONLY JSON with keys:\n"
         + '  "slots": object with any newly inferred fields from this user message,\n'
         + '  "reply": your next WhatsApp message to the user,\n'
+        + '  "language": English|Hindi|Marathi|Kannada if the user just changed language, else null,\n'
         + '  "ready_for_confirm": boolean true only when ALL required slots are filled.\n'
         + "Required slots and allowed values:\n"
         + _slot_schema(journey)
         + count_note
+        + f"Ask EXACTLY ONE question: only the next outstanding slot ({next_id}). "
+        + "Never list, number, or combine remaining questions. Never paste option lists for multiple slots.\n"
+        + "Extract every slot value present in this user message, even if mixed with a language-switch request.\n"
         + "If the user asks something off-topic, answer briefly then continue collecting.\n"
         + "Do not list schemes yet. Do not claim eligibility.\n"
     )
@@ -202,6 +256,7 @@ def _conversational_collect(session: dict[str, Any], journey: dict[str, Any], te
             "language": session.get("language"),
             "already_collected": session.get("slots") or {},
             "still_needed": missing_ids,
+            "ask_only": next_id,
             "user_message": text,
         },
         ensure_ascii=False,
@@ -209,6 +264,12 @@ def _conversational_collect(session: dict[str, Any], journey: dict[str, Any], te
     data = llm.chat_json(system, user, temperature=0.3)
     if not data:
         return None
+
+    llm_lang = data.get("language")
+    if llm_lang in i18n.SUPPORTED:
+        session["language"] = llm_lang
+        if llm_lang != switched_to:
+            switched_to = llm_lang
 
     prefer = missing_ids[0] if missing_ids else None
     extracted = _merge_llm_slots(data, allowed)
@@ -222,15 +283,18 @@ def _conversational_collect(session: dict[str, Any], journey: dict[str, Any], te
     ready = bool(data.get("ready_for_confirm")) and not missing_after
     if ready or not missing_after:
         session["phase"] = "confirm_profile"
-        # Prefer a conversational confirm if LLM gave one, else template
-        if reply and data.get("ready_for_confirm"):
-            return reply + "\n\n" + _profile_summary(session["slots"], journey_id)
-        return _profile_summary(session["slots"], journey_id)
+        summary = _profile_summary(session["slots"], journey_id, session.get("language"))
+        if (
+            reply
+            and data.get("ready_for_confirm")
+            and i18n.reply_matches_language(reply, session.get("language"))
+            and not i18n.is_multi_slot_prompt(reply, journey.get("slots") or [])
+        ):
+            return reply + "\n\n" + summary
+        return summary
 
-    if reply:
-        return reply
     if missing_after:
-        return _ask_slot(missing_after[0])
+        return _one_slot_reply(session, missing_after, llm_reply=reply, switched_to=switched_to)
     return None
 
 
@@ -244,7 +308,8 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
             SYSTEM_PERSONA
             + "\nUser is choosing a language. Return JSON: "
             '{"language": "English"|"Hindi"|"Marathi"|"Kannada"|null, "reply": "..."}. '
-            "If unclear, ask again. If set, greet briefly and ask Individual Schemes / Family Schemes / Help."
+            "If unclear, ask again. If set, greet briefly IN THAT LANGUAGE and ask "
+            "Individual Schemes / Family Schemes / Help. Ask only that one menu question."
         )
         data = llm.chat_json(system, text, temperature=0.4)
         if not data:
@@ -259,11 +324,12 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
     if phase == "main_menu":
         system = (
             SYSTEM_PERSONA
+            + i18n.language_instruction(session.get("language"))
             + "\nUser is at main menu. Return JSON: "
             '{"choice": "Individual Schemes"|"Family Schemes"|"I need help"|null, "reply": "..."}. '
             "If Individual Schemes, start collecting an individual profile conversationally (ask state first). "
             "If Family Schemes, start collecting a household profile conversationally (ask state first). "
-            "If help, ask what support they need."
+            "If help, ask what support they need. Ask exactly one question."
         )
         data = llm.chat_json(
             system,
@@ -296,6 +362,7 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
     if phase == "help_crm":
         system = (
             SYSTEM_PERSONA
+            + i18n.language_instruction(session.get("language"))
             + "\nUser is describing a support issue. Acknowledge warmly in JSON: "
             '{"reply": "...", "summary": "short issue summary"}.'
         )
@@ -323,6 +390,7 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
         )
         system = (
             SYSTEM_PERSONA
+            + i18n.language_instruction(session.get("language"))
             + "\nExplain this scheme simply for WhatsApp. Return plain text only (no JSON). "
             "Include benefit, who it is for, and that official verification is needed. "
             + offer
@@ -342,6 +410,9 @@ def handle_message(user_id: str, text: str) -> str:
     journey = load_journey(session.get("journey_id"))
     phase = session["phase"]
     low = text.lower().strip()
+    switched_to = None
+    if phase != "welcome_language":
+        switched_to = _apply_language_switch(session, text)
 
     # Global restart
     if low in ("hi", "hello", "hey", "start", "restart", "/start"):
@@ -371,7 +442,7 @@ def handle_message(user_id: str, text: str) -> str:
             )
         session["language"] = lang
         session["phase"] = "main_menu"
-        return f"Great — continuing in {lang}.\n\n" + _main_menu()
+        return i18n.t("continuing_in", lang, chosen=lang) + "\n\n" + _main_menu(lang)
 
     # ---- main menu ----
     if phase == "main_menu":
@@ -380,25 +451,22 @@ def handle_message(user_id: str, text: str) -> str:
             return convo
         choice = nlu.detect_menu(text)
         if not choice:
-            return "Please choose Individual Schemes, Family Schemes, or I need help."
+            return i18n.t("menu_unclear", session.get("language"))
         if choice == "I need help":
             session["phase"] = "help_crm"
-            return (
-                "I can help with that. Please tell me briefly what you need "
-                "support with, and I’ll create a support request for the SETU team."
-            )
+            return i18n.t("help_intro", session.get("language"))
         if choice == "Family Schemes":
             journey = _start_journey(session, "journey_2")
             return (
-                "You’ve chosen Family Schemes. I’ll ask a few short questions "
-                "about your household so I can show schemes that may be relevant.\n\n"
-                + _ask_slot(journey["slots"][0])
+                i18n.t("family_intro", session.get("language"))
+                + "\n\n"
+                + _ask_slot(journey["slots"][0], session.get("language"))
             )
         journey = _start_journey(session, "journey_1")
         return (
-            "You’ve chosen Individual Schemes. I’ll ask a few short questions "
-            "so I can show schemes that may be relevant to you.\n\n"
-            + _ask_slot(journey["slots"][0])
+            i18n.t("individual_intro", session.get("language"))
+            + "\n\n"
+            + _ask_slot(journey["slots"][0], session.get("language"))
         )
 
     # ---- help / CRM ----
@@ -409,14 +477,14 @@ def handle_message(user_id: str, text: str) -> str:
         print(f"CRM_TICKET user={user_id} issue={text}", flush=True)
         session["phase"] = "end_menu"
         return (
-            "Thanks — I’ve logged a support request for the SETU team "
-            f"(ref: SETU-{user_id[-4:]}).\n\n"
-            "Would you like to go back to the *Main Menu* or *End Chat*?"
+            i18n.t("help_logged", session.get("language"), ref=user_id[-4:])
+            + "\n\n"
+            + i18n.t("end_menu", session.get("language"))
         )
 
     # ---- collect profile (conversational) ----
     if phase == "collect_profile":
-        convo = _conversational_collect(session, journey, text)
+        convo = _conversational_collect(session, journey, text, switched_to=switched_to)
         if convo:
             return convo
 
@@ -426,20 +494,26 @@ def handle_message(user_id: str, text: str) -> str:
         extracted = _apply_extracted(session, extracted, prefer=prefer)
 
         missing = _missing_slots(journey, session["slots"])
+        lang = session.get("language")
         if not extracted and missing:
-            return "I didn’t catch that clearly. " + _ask_slot(missing[0])
+            prefix = ""
+            if switched_to:
+                prefix = i18n.t("language_switch_ack", lang) + "\n\n"
+            return prefix + i18n.t("didnt_catch", lang) + " " + _ask_slot(missing[0], lang)
 
         missing = _missing_slots(journey, session["slots"])
         if missing:
-            nxt = missing[0]
-            ack = ""
+            parts: list[str] = []
+            if switched_to:
+                parts.append(i18n.t("language_switch_ack", lang))
             if extracted:
                 bits = [f"{k.replace('_', ' ')}: {v}" for k, v in extracted.items()]
-                ack = "Got it — " + "; ".join(bits) + ".\n\n"
-            return ack + _ask_slot(nxt)
+                parts.append(i18n.t("got_it", lang, bits="; ".join(bits)))
+            parts.append(_ask_slot(missing[0], lang))
+            return "\n\n".join(parts)
 
         session["phase"] = "confirm_profile"
-        return _profile_summary(session["slots"], session.get("journey_id"))
+        return _profile_summary(session["slots"], session.get("journey_id"), lang)
 
     # ---- confirm profile (deterministic branch) ----
     if phase == "confirm_profile":
@@ -447,6 +521,7 @@ def handle_message(user_id: str, text: str) -> str:
         if decision is None and llm.llm_configured():
             data = llm.chat_json(
                 SYSTEM_PERSONA
+                + i18n.language_instruction(session.get("language"))
                 + '\nUser confirming profile. Return JSON {"decision":"Proceed"|"Edit details"|null,"reply":"..."}',
                 text,
                 temperature=0.1,
@@ -460,11 +535,15 @@ def handle_message(user_id: str, text: str) -> str:
             if keep_state:
                 session["slots"]["state"] = keep_state
             return (
-                "No problem — let’s update your details.\n\n"
-                + _ask_slot(journey["slots"][0] if not keep_state else journey["slots"][1])
+                i18n.t("edit_ack", session.get("language"))
+                + "\n\n"
+                + _ask_slot(
+                    journey["slots"][0] if not keep_state else journey["slots"][1],
+                    session.get("language"),
+                )
             )
         if decision != "Proceed":
-            return "Please reply *Proceed* to match schemes, or *Edit details* to change something."
+            return i18n.t("confirm_unclear", session.get("language"))
 
         matched, scope_note = eligibility.match_schemes(
             session["slots"], journey_id=session.get("journey_id")
@@ -476,6 +555,7 @@ def handle_message(user_id: str, text: str) -> str:
         if llm.llm_configured():
             intro = llm.chat_text(
                 SYSTEM_PERSONA
+                + i18n.language_instruction(session.get("language"))
                 + "\nWrite a short warm intro (1-2 sentences) before a scheme list. Plain text. No bullet list.",
                 json.dumps({"slots": session["slots"], "count": len(matched)}, ensure_ascii=False),
                 temperature=0.5,
@@ -493,6 +573,7 @@ def handle_message(user_id: str, text: str) -> str:
             names = [f"{i+1}. {s.get('Scheme Name')}" for i, s in enumerate(schemes)]
             data = llm.chat_json(
                 SYSTEM_PERSONA
+                + i18n.language_instruction(session.get("language"))
                 + "\nUser is picking a scheme from the list. Return JSON "
                 '{"index": 1-based int or null, "reply": optional clarifying question}.',
                 json.dumps({"options": names, "user_message": text}, ensure_ascii=False),
@@ -507,9 +588,12 @@ def handle_message(user_id: str, text: str) -> str:
         if not chosen:
             if "edit" in low:
                 session["phase"] = "confirm_profile"
-                return _profile_summary(session["slots"], session.get("journey_id"))
+                return _profile_summary(
+                    session["slots"], session.get("journey_id"), session.get("language")
+                )
             return (
-                "Please reply with the scheme number or name from the list.\n\n"
+                i18n.t("scheme_pick", session.get("language"))
+                + "\n\n"
                 + eligibility.format_scheme_list(schemes)
             )
         session["selected_scheme_sn"] = chosen.get("SN")
@@ -518,7 +602,10 @@ def handle_message(user_id: str, text: str) -> str:
         if convo:
             return convo
         return eligibility.format_scheme_detail(
-            chosen, back_prompt=_after_detail_prompt(session.get("journey_id"))
+            chosen,
+            back_prompt=_after_detail_prompt(
+                session.get("journey_id"), session.get("language")
+            ),
         )
 
     # ---- scheme detail ----
@@ -526,10 +613,7 @@ def handle_message(user_id: str, text: str) -> str:
         action = nlu.detect_after_scheme(text)
         if action == "I need help":
             session["phase"] = "help_crm"
-            return (
-                "I can help with that. Please tell me briefly what you need "
-                "support with, and I’ll create a support request for the SETU team."
-            )
+            return i18n.t("help_intro", session.get("language"))
         if action in ("View other schemes", "Go Back") or "other" in low or "list" in low or "back" in low:
             session["phase"] = "scheme_list"
             return eligibility.format_scheme_list(session.get("matched_schemes") or [])
@@ -541,7 +625,10 @@ def handle_message(user_id: str, text: str) -> str:
             if convo:
                 return convo
             return eligibility.format_scheme_detail(
-                chosen, back_prompt=_after_detail_prompt(session.get("journey_id"))
+                chosen,
+                back_prompt=_after_detail_prompt(
+                    session.get("journey_id"), session.get("language")
+                ),
             )
         # free-text question about scheme
         if llm.llm_configured():
@@ -552,6 +639,7 @@ def handle_message(user_id: str, text: str) -> str:
             if scheme:
                 ans = llm.chat_text(
                     SYSTEM_PERSONA
+                    + i18n.language_instruction(session.get("language"))
                     + "\nAnswer the user's question using only the scheme JSON. If unknown, say to check the official link. Plain text. "
                     + (
                         "Offer *I need help* or *Go Back*."
@@ -564,7 +652,7 @@ def handle_message(user_id: str, text: str) -> str:
                 if ans:
                     return ans
         session["phase"] = "end_menu"
-        return "Would you like to go back to the *Main Menu* or *End Chat*?"
+        return i18n.t("end_menu", session.get("language"))
 
     # ---- end menu ----
     if phase == "end_menu":
@@ -575,17 +663,17 @@ def handle_message(user_id: str, text: str) -> str:
             session["slots"] = {}
             session["matched_schemes"] = []
             session["selected_scheme_sn"] = None
-            return _main_menu()
+            return _main_menu(session.get("language"))
         if choice == "End Chat":
             session["phase"] = "feedback"
-            return "Before you go, how would you rate your experience with SETU today? (1–5)"
-        return "Please choose *Main Menu* or *End Chat*."
+            return i18n.t("feedback_prompt", session.get("language"))
+        return i18n.t("choose_end", session.get("language"))
 
     # ---- feedback (deterministic rating gate) ----
     if phase == "feedback":
         rating = nlu.detect_rating(text)
         if rating is None:
-            return "Please rate from 1 to 5."
+            return i18n.t("feedback_need_rating", session.get("language"))
         session["rating"] = rating
         if rating in (1, 2):
             reset_session(user_id)
@@ -606,4 +694,4 @@ def handle_message(user_id: str, text: str) -> str:
         return "No problem — goodbye!"
 
     session["phase"] = "main_menu"
-    return "Let’s restart from the menu.\n\n" + _main_menu()
+    return i18n.t("restart_menu", session.get("language")) + "\n\n" + _main_menu(session.get("language"))
