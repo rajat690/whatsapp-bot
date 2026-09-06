@@ -44,11 +44,13 @@ PROFILE_LABELS = {
 }
 
 SYSTEM_PERSONA = """You are SETU, a warm WhatsApp assistant that helps people in India discover government schemes.
-Style: short, natural chat messages (2-5 sentences max). No markdown tables. Light WhatsApp formatting (*bold*) sparingly.
-You may ask clarifying questions. Never invent scheme eligibility — the app will run a deterministic matcher.
+Style: short, natural chat messages (1-4 sentences). Sound like a helpful person, not a form or call-centre script.
+No markdown tables. Light WhatsApp formatting (*bold*) sparingly.
+Never invent scheme eligibility — the app will run a deterministic matcher.
 Languages: greet/accept English, Hindi, Marathi, Kannada.
 Always reply in the session language. Never revert to an earlier language.
-During profile collection ask EXACTLY ONE outstanding slot per turn. Never list or combine remaining questions.
+During profile collection: acknowledge what the user just said in plain words, then ask EXACTLY ONE outstanding fact.
+Never list, number, or combine remaining questions. Never paste option menus for several fields.
 """
 
 
@@ -115,12 +117,9 @@ def _start_journey(session: dict[str, Any], journey_id: str) -> dict[str, Any]:
 
 
 def _ask_slot(slot: dict[str, Any], language: str | None = None) -> str:
+    """Fallback question used only when the LLM is unavailable or its reply is unusable."""
     lang = _lang(language=language)
-    hint = i18n.slot_prompt(slot["id"], lang, slot.get("prompt_hint"))
-    options = slot.get("options")
-    if options:
-        return f"{hint}\n{i18n.t('reply_examples', lang, examples=', '.join(options[:5]))}"
-    return f"{hint}\n{i18n.t('reply_own_words', lang)}"
+    return i18n.slot_prompt(slot["id"], lang, slot.get("prompt_hint"))
 
 
 def _one_slot_reply(
@@ -129,20 +128,15 @@ def _one_slot_reply(
     llm_reply: str | None = None,
     switched_to: str | None = None,
 ) -> str:
-    """Ask exactly one outstanding slot, ignoring multi-question LLM dumps."""
+    """Prefer the LLM's natural collect reply; templates are fallback only."""
     lang = _lang(session)
-    next_q = _ask_slot(missing_after[0], lang)
     reply = (llm_reply or "").strip()
-    if (
-        reply
-        and i18n.reply_matches_language(reply, lang)
-        and not i18n.is_multi_slot_prompt(reply, missing_after)
-    ):
+    if i18n.usable_collect_reply(reply, lang, missing_after):
         return reply
     parts: list[str] = []
     if switched_to:
         parts.append(i18n.t("language_switch_ack", lang))
-    parts.append(next_q)
+    parts.append(_ask_slot(missing_after[0], lang))
     return "\n\n".join(parts)
 
 
@@ -245,10 +239,15 @@ def _conversational_collect(
         + "Required slots and allowed values:\n"
         + _slot_schema(journey)
         + count_note
-        + f"Ask EXACTLY ONE question: only the next outstanding slot ({next_id}). "
-        + "Never list, number, or combine remaining questions. Never paste option lists for multiple slots.\n"
         + "Extract every slot value present in this user message, even if mixed with a language-switch request.\n"
-        + "If the user asks something off-topic, answer briefly then continue collecting.\n"
+        + "The slot schema is for extraction only — never recite several fields or their option lists.\n"
+        + "Write reply as a helpful WhatsApp chat: briefly acknowledge the user's words "
+        + "(not slot-id labels like 'state: Karnataka'), then ask only "
+        + f"the next needed fact ({next_id}) as ONE natural question.\n"
+        + "Do not use form-field labels. Light option hints are OK for that one question, "
+        + "or omit them if a free-text answer works (age, numbers, yes/no, state names).\n"
+        + "If the user chats off-topic or answers in a full sentence, stay conversational "
+        + "and still extract every slot value you can.\n"
         + "Do not list schemes yet. Do not claim eligibility.\n"
     )
     user = json.dumps(
@@ -261,7 +260,7 @@ def _conversational_collect(
         },
         ensure_ascii=False,
     )
-    data = llm.chat_json(system, user, temperature=0.3)
+    data = llm.chat_json(system, user, temperature=0.45)
     if not data:
         return None
 
@@ -284,11 +283,8 @@ def _conversational_collect(
     if ready or not missing_after:
         session["phase"] = "confirm_profile"
         summary = _profile_summary(session["slots"], journey_id, session.get("language"))
-        if (
-            reply
-            and data.get("ready_for_confirm")
-            and i18n.reply_matches_language(reply, session.get("language"))
-            and not i18n.is_multi_slot_prompt(reply, journey.get("slots") or [])
+        if reply and data.get("ready_for_confirm") and i18n.usable_collect_reply(
+            reply, session.get("language"), journey.get("slots") or []
         ):
             return reply + "\n\n" + summary
         return summary
@@ -507,8 +503,7 @@ def handle_message(user_id: str, text: str) -> str:
             if switched_to:
                 parts.append(i18n.t("language_switch_ack", lang))
             if extracted:
-                bits = [f"{k.replace('_', ' ')}: {v}" for k, v in extracted.items()]
-                parts.append(i18n.t("got_it", lang, bits="; ".join(bits)))
+                parts.append(i18n.t("got_it_short", lang))
             parts.append(_ask_slot(missing[0], lang))
             return "\n\n".join(parts)
 

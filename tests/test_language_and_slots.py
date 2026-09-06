@@ -82,6 +82,57 @@ class MultiSlotGuardTests(unittest.TestCase):
             )
         )
 
+    def test_natural_two_question_marks_is_not_a_dump(self):
+        missing = [
+            {"id": sid}
+            for sid in ("age_group", "occupation", "household_income", "disability")
+        ]
+        natural = (
+            "Nice, Karnataka! How old are you? Under 18, around 18 to 59, or 60+?"
+        )
+        self.assertFalse(i18n.is_multi_slot_prompt(natural, missing))
+        self.assertTrue(i18n.usable_collect_reply(natural, "English", missing))
+
+    def test_option_bullets_for_one_slot_are_not_a_dump(self):
+        missing = [
+            {"id": sid}
+            for sid in ("occupation", "household_income", "social_category")
+        ]
+        natural = "Got it — you're 28. What do you do for work?\n• Farmer\n• Labourer\n• Salaried"
+        self.assertFalse(i18n.is_multi_slot_prompt(natural, missing))
+        self.assertTrue(i18n.usable_collect_reply(natural, "English", missing))
+
+    def test_two_remaining_slots_asked_is_still_a_dump(self):
+        missing = [
+            {"id": sid}
+            for sid in ("children_under_18", "members_60_plus", "housing")
+        ]
+        dump = "How many children under 18? And how many members are aged 60+?"
+        self.assertTrue(i18n.is_multi_slot_prompt(dump, missing))
+        self.assertFalse(i18n.usable_collect_reply(dump, "English", missing))
+
+
+class LanguageMatchTests(unittest.TestCase):
+    def test_english_allows_light_native_code_mix(self):
+        reply = (
+            "Sure, English it is. Noted — Karnataka (कर्नाटक). "
+            "How many people live in your household?"
+        )
+        self.assertTrue(i18n.reply_matches_language(reply, "English"))
+        self.assertTrue(
+            i18n.usable_collect_reply(
+                reply, "English", [{"id": "household_size"}, {"id": "children_under_18"}]
+            )
+        )
+
+    def test_english_rejects_mostly_marathi_reply(self):
+        reply = "कुटुंबात 18 वर्षांखालील किती मुले आहेत?"
+        self.assertFalse(i18n.reply_matches_language(reply, "English"))
+
+    def test_hindi_still_requires_devanagari(self):
+        self.assertTrue(i18n.reply_matches_language("आप किस आयु वर्ग में हैं?", "Hindi"))
+        self.assertFalse(i18n.reply_matches_language("Which age group are you in?", "Hindi"))
+
 
 class KeywordJourneyTests(unittest.TestCase):
     def test_one_slot_at_a_time_without_llm_both_journeys(self):
@@ -95,6 +146,8 @@ class KeywordJourneyTests(unittest.TestCase):
         self.assertIn("age", reply.lower())
         self.assertNotIn("marital", reply.lower())
         self.assertNotIn("disability", reply.lower())
+        self.assertNotIn("Examples:", reply)
+        self.assertNotIn("Farmer, Labourer", reply)
 
         uid = "kw-j2"
         reset_session(uid)
@@ -226,6 +279,130 @@ class LlmRegressionTests(unittest.TestCase):
             self.assertNotIn("Farmer, Labourer", reply)
             self.assertEqual(get_session(uid)["slots"].get("state"), "Karnataka")
             self.assertFalse(get_session(uid)["slots"].get("occupation"))
+
+    def test_natural_llm_reply_is_shown_not_template(self):
+        uid = "llm-natural"
+        reset_session(uid)
+        natural = (
+            "Nice, Karnataka! How old are you? You can just say 28, or 60 if you're a senior."
+        )
+        replies = iter(
+            [
+                {"language": "English", "reply": "Hi! Individual, Family, or help?"},
+                {
+                    "choice": "Individual Schemes",
+                    "reply": "Sure — which state do you live in?",
+                },
+                {
+                    "slots": {"state": "Karnataka"},
+                    "reply": natural,
+                    "ready_for_confirm": False,
+                },
+            ]
+        )
+
+        def fake_json(_system, _user, temperature=0.3):
+            return next(replies)
+
+        with (
+            patch("setu.llm.llm_configured", return_value=True),
+            patch("setu.orchestrator.llm.llm_configured", return_value=True),
+            patch("setu.llm.chat_json", side_effect=fake_json),
+            patch("setu.orchestrator.llm.chat_json", side_effect=fake_json),
+        ):
+            handle_message(uid, "English")
+            handle_message(uid, "individual schemes")
+            reply = handle_message(uid, "I stay in Karnataka")
+            self.assertEqual(reply, natural)
+            self.assertNotIn("Which age group are you in?", reply)
+            self.assertNotIn("Examples:", reply)
+            self.assertEqual(get_session(uid)["slots"].get("state"), "Karnataka")
+
+    def test_off_topic_sentence_keeps_conversational_llm_reply(self):
+        uid = "llm-offtopic"
+        reset_session(uid)
+        natural = (
+            "Ha, I follow cricket too. Anyway — roughly how old are you?"
+        )
+        replies = iter(
+            [
+                {"language": "English", "reply": "Hi! Individual, Family, or help?"},
+                {
+                    "choice": "Individual Schemes",
+                    "reply": "Which state do you live in?",
+                },
+                {
+                    "slots": {"state": "Maharashtra"},
+                    "reply": "Got it, Maharashtra. How old are you?",
+                    "ready_for_confirm": False,
+                },
+                {
+                    "slots": {},
+                    "reply": natural,
+                    "ready_for_confirm": False,
+                },
+            ]
+        )
+
+        def fake_json(_system, _user, temperature=0.3):
+            return next(replies)
+
+        with (
+            patch("setu.llm.llm_configured", return_value=True),
+            patch("setu.orchestrator.llm.llm_configured", return_value=True),
+            patch("setu.llm.chat_json", side_effect=fake_json),
+            patch("setu.orchestrator.llm.chat_json", side_effect=fake_json),
+        ):
+            handle_message(uid, "English")
+            handle_message(uid, "individual")
+            handle_message(uid, "Maharashtra")
+            reply = handle_message(uid, "by the way did you watch the match yesterday")
+            self.assertEqual(reply, natural)
+            self.assertFalse(get_session(uid)["slots"].get("age_group"))
+            self.assertEqual(get_session(uid)["slots"].get("state"), "Maharashtra")
+
+    def test_journey2_natural_reply_is_shown_not_template(self):
+        uid = "llm-j2-natural"
+        reset_session(uid)
+        natural = (
+            "Five of you — nice. How many children under 18? Zero is completely fine."
+        )
+        replies = iter(
+            [
+                {"language": "English", "reply": "Hi! Individual, Family, or help?"},
+                {
+                    "choice": "Family Schemes",
+                    "reply": "Which state does your family live in?",
+                },
+                {
+                    "slots": {"state": "Karnataka"},
+                    "reply": "Karnataka, got it. How many people live in the house, including you?",
+                    "ready_for_confirm": False,
+                },
+                {
+                    "slots": {"household_size": "5"},
+                    "reply": natural,
+                    "ready_for_confirm": False,
+                },
+            ]
+        )
+
+        def fake_json(_system, _user, temperature=0.3):
+            return next(replies)
+
+        with (
+            patch("setu.llm.llm_configured", return_value=True),
+            patch("setu.orchestrator.llm.llm_configured", return_value=True),
+            patch("setu.llm.chat_json", side_effect=fake_json),
+            patch("setu.orchestrator.llm.chat_json", side_effect=fake_json),
+        ):
+            handle_message(uid, "English")
+            handle_message(uid, "family")
+            handle_message(uid, "Karnataka")
+            reply = handle_message(uid, "there are five of us")
+            self.assertEqual(reply, natural)
+            self.assertNotIn("How many children under 18 are in the household?", reply)
+            self.assertEqual(get_session(uid)["slots"].get("household_size"), "5")
 
 
 if __name__ == "__main__":
