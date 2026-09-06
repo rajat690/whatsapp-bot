@@ -2,6 +2,8 @@ import os
 import requests
 from flask import Flask, request, jsonify
 
+from setu.orchestrator import handle_message
+
 app = Flask(__name__)
 
 # Configure these in Render > Environment.
@@ -53,7 +55,6 @@ def receive_message():
                 for change in entry.get("changes", []):
                     value = change.get("value", {})
 
-                    # Status/read/delivery events may not contain "messages".
                     for message in value.get("messages", []):
                         user_phone = message.get("from")
                         message_type = message.get("type")
@@ -61,29 +62,38 @@ def receive_message():
                         if not user_phone:
                             continue
 
+                        user_text = None
+
                         if message_type == "text":
                             user_text = (
                                 message.get("text", {})
                                 .get("body", "")
                                 .strip()
                             )
-
-                            if user_text:
-                                print(
-                                    f"Incoming text from {user_phone}: {user_text}",
-                                    flush=True,
+                        elif message_type == "interactive":
+                            interactive = message.get("interactive", {})
+                            itype = interactive.get("type")
+                            if itype == "button_reply":
+                                user_text = (
+                                    interactive.get("button_reply", {})
+                                    .get("title", "")
+                                    .strip()
+                                )
+                            elif itype == "list_reply":
+                                user_text = (
+                                    interactive.get("list_reply", {})
+                                    .get("title", "")
+                                    .strip()
                                 )
 
-                                bot_reply = (
-                                    "Bot Prototype: "
-                                    f"I received your message: '{user_text}'"
-                                )
-
-                                send_whatsapp_message(
-                                    user_phone,
-                                    bot_reply,
-                                )
-                        else:
+                        if user_text:
+                            print(
+                                f"Incoming from {user_phone}: {user_text}",
+                                flush=True,
+                            )
+                            bot_reply = handle_message(user_phone, user_text)
+                            send_whatsapp_message(user_phone, bot_reply)
+                        elif message_type:
                             print(
                                 f"Ignoring unsupported message type: "
                                 f"{message_type}",
@@ -121,6 +131,10 @@ def send_whatsapp_message(recipient_phone, message_text):
         "Authorization": f"Bearer {ACCESS_TOKEN}",
         "Content-Type": "application/json",
     }
+
+    # WhatsApp text body max ~4096 chars
+    if message_text and len(message_text) > 4000:
+        message_text = message_text[:3990] + "…"
 
     payload = {
         "messaging_product": "whatsapp",
