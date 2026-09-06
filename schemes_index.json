@@ -1,0 +1,22 @@
+{
+  "libraries": [
+    {
+      "state_scope": "Karnataka",
+      "file": "schemes_karnataka.json",
+      "count": 85,
+      "source": "Karnataka Scheme Master"
+    },
+    {
+      "state_scope": "Maharashtra",
+      "file": "schemes_maharashtra.json",
+      "count": 95,
+      "source": "Maharashtra Scheme Master"
+    },
+    {
+      "state_scope": "Central",
+      "file": "schemes_central.json",
+      "count": 108,
+      "source": "Central Scheme Master"
+    }
+  ]
+}

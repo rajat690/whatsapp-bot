@@ -1,0 +1,278 @@
+{
+  "id": "journey_1_individual",
+  "name": "Individual Scheme Discovery",
+  "bot_name": "SETU",
+  "languages": [
+    "English",
+    "Hindi",
+    "Marathi",
+    "Kannada"
+  ],
+  "menu_options": [
+    "Individual Schemes",
+    "Family Schemes",
+    "I need help"
+  ],
+  "slots": [
+    {
+      "id": "state",
+      "prompt_hint": "Which state do you currently live in?",
+      "type": "state",
+      "required": true
+    },
+    {
+      "id": "age_group",
+      "prompt_hint": "Which age group are you in?",
+      "type": "enum",
+      "options": [
+        "0–17",
+        "18–59",
+        "60+"
+      ],
+      "required": true
+    },
+    {
+      "id": "occupation",
+      "prompt_hint": "What best describes your current occupation?",
+      "type": "enum",
+      "options": [
+        "Farmer",
+        "Labourer",
+        "Salaried",
+        "Self-employed",
+        "Student",
+        "Unemployed",
+        "Homemaker",
+        "Retired",
+        "Other"
+      ],
+      "required": true
+    },
+    {
+      "id": "household_income",
+      "prompt_hint": "Which range best describes your total monthly household income?",
+      "type": "enum",
+      "options": [
+        "Up to ₹10,000",
+        "₹10,001–₹30,000",
+        "₹30,001–₹50,000",
+        "Above ₹50,000",
+        "Prefer not to say"
+      ],
+      "required": true
+    },
+    {
+      "id": "social_category",
+      "prompt_hint": "Which social category would you like to select?",
+      "type": "enum",
+      "options": [
+        "SC",
+        "ST",
+        "OBC",
+        "General",
+        "Minority"
+      ],
+      "required": true
+    },
+    {
+      "id": "marital_status",
+      "prompt_hint": "What is your marital status?",
+      "type": "enum",
+      "options": [
+        "Single",
+        "Married",
+        "Widowed",
+        "Divorced / Separated",
+        "Prefer not to say"
+      ],
+      "required": true
+    },
+    {
+      "id": "disability",
+      "prompt_hint": "Do you have a disability?",
+      "type": "enum",
+      "options": [
+        "Yes",
+        "No",
+        "Prefer not to say"
+      ],
+      "required": true
+    }
+  ],
+  "hard_branches": {
+    "menu": {
+      "Individual Schemes": "collect_profile",
+      "Family Schemes": "journey_2_stub",
+      "I need help": "help_crm"
+    },
+    "confirm_profile": {
+      "Proceed": "match_schemes",
+      "Edit details": "collect_profile"
+    },
+    "after_scheme_detail": {
+      "I need help": "help_crm",
+      "View other schemes": "scheme_list"
+    },
+    "end_menu": {
+      "Main Menu": "main_menu",
+      "End Chat": "feedback"
+    },
+    "feedback_rating": {
+      "referral_if": [
+        3,
+        4,
+        5
+      ],
+      "end_if": [
+        1,
+        2
+      ]
+    }
+  },
+  "excel_steps": [
+    {
+      "Step ID": "S001",
+      "Message Content (English)": "Hi! Welcome to SETU. I can help you discover government schemes or get support with an issue. Which language would you like to continue in?",
+      "Interaction Type": "Quick Reply",
+      "Option Label": "English | Hindi | Marathi | Kannada",
+      "Next Step": "S002",
+      "Notes": "Welcome and language selection merged into one step. Confirm supported languages and translations for every BOT message."
+    },
+    {
+      "Step ID": "S002",
+      "Message Content (English)": "What would you like to explore today?",
+      "Interaction Type": "Quick Reply",
+      "Option Label": "Individual Schemes | Family Schemes | I need help",
+      "Next Step": "S003 | Flow 2 | H001",
+      "Notes": "Individual Schemes starts Flow 1. Family Schemes routes to Flow 2. 'I need help' bypasses demographics and goes directly to CRM ticket creation."
+    },
+    {
+      "Step ID": "S003",
+      "Message Content (English)": "You’ve chosen Individual Schemes. I’ll ask a few short questions so I can show schemes that may be relevant to you.",
+      "Interaction Type": "None",
+      "Option Label": "-",
+      "Next Step": "S004",
+      "Notes": "Flow 1: Individual Scheme Discovery."
+    },
+    {
+      "Step ID": "S004",
+      "Message Content (English)": "Which state do you currently live in?",
+      "Interaction Type": "Dropdown",
+      "Option Label": "State list",
+      "Next Step": "S005",
+      "Notes": "State selection. BOT is intended for citizens of India, so a separate citizenship question is not required."
+    },
+    {
+      "Step ID": "S005",
+      "Message Content (English)": "Which age group are you in?",
+      "Interaction Type": "Quick Reply",
+      "Option Label": "0–17 | 18–59 | 60+",
+      "Next Step": "S006",
+      "Notes": "District collection removed from scheme discovery. Exact location should be captured only at CRM ticket creation stage."
+    },
+    {
+      "Step ID": "S006",
+      "Message Content (English)": "What best describes your current occupation?",
+      "Interaction Type": "Dropdown",
+      "Option Label": "Farmer | Labourer | Salaried | Self-employed | Student | Unemployed | Homemaker | Retired | Other",
+      "Next Step": "S007",
+      "Notes": "Final occupation taxonomy to be confirmed."
+    },
+    {
+      "Step ID": "S007",
+      "Message Content (English)": "Which range best describes your total monthly household income?",
+      "Interaction Type": "Dropdown",
+      "Option Label": "Up to ₹10,000 | ₹10,001–₹30,000 | ₹30,001–₹50,000 | Above ₹50,000 | Prefer not to say",
+      "Next Step": "S008",
+      "Notes": "Income bands should be validated against the scheme eligibility engine and may need annual-income equivalents."
+    },
+    {
+      "Step ID": "S008",
+      "Message Content (English)": "Which social category would you like to select?",
+      "Interaction Type": "Dropdown",
+      "Option Label": "SC | ST | OBC | General | Minority",
+      "Next Step": "S009",
+      "Notes": "Caste / social-category options updated for scheme eligibility: SC, ST, OBC, General, Minority."
+    },
+    {
+      "Step ID": "S009",
+      "Message Content (English)": "What is your marital status?",
+      "Interaction Type": "Dropdown",
+      "Option Label": "Single | Married | Widowed | Divorced / Separated | Prefer not to say",
+      "Next Step": "S010",
+      "Notes": "-"
+    },
+    {
+      "Step ID": "S010",
+      "Message Content (English)": "Do you have a disability?",
+      "Interaction Type": "Quick Reply",
+      "Option Label": "Yes | No | Prefer not to say",
+      "Next Step": "S011",
+      "Notes": "Disability percentage is not collected. BOT captures only disability status at this stage."
+    },
+    {
+      "Step ID": "S011",
+      "Message Content (English)": "Here’s what I have so far. Please check your details before I look for matching schemes.",
+      "Interaction Type": "Quick Reply",
+      "Option Label": "Proceed | Edit details",
+      "Next Step": "S012 | S004",
+      "Notes": null
+    },
+    {
+      "Step ID": "S012",
+      "Message Content (English)": "Based on the information you shared, here are the schemes that may be relevant to you. Choose one to learn more.",
+      "Interaction Type": "List",
+      "Option Label": "Eligible scheme list",
+      "Next Step": "S013",
+      "Notes": "Eligibility logic and ranking rules are required. Results should explain that final eligibility depends on official scheme verification."
+    },
+    {
+      "Step ID": "S013",
+      "Message Content (English)": "Which scheme would you like to explore?",
+      "Interaction Type": "List",
+      "Option Label": "Selected eligible scheme",
+      "Next Step": "S014",
+      "Notes": "Allow the user to return to the eligible-scheme list without re-entering profile information."
+    },
+    {
+      "Step ID": "S014",
+      "Message Content (English)": "Here are the key details for this scheme: benefits, who can apply, documents you may need, how to apply, and useful links or contacts. What would you like to do next?",
+      "Interaction Type": "Quick Reply",
+      "Option Label": "I need help | View other schemes",
+      "Next Step": "H001 | S013",
+      "Notes": "-"
+    },
+    {
+      "Step ID": "S015",
+      "Message Content (English)": "Would you like to go back to the main menu or end this chat?",
+      "Interaction Type": "Quick Reply",
+      "Option Label": "Main Menu | End Chat",
+      "Next Step": "S002 | S016",
+      "Notes": "If End Chat is selected, proceed to feedback before closing."
+    },
+    {
+      "Step ID": "S016",
+      "Message Content (English)": "Before you go, how would you rate your experience with SETU today?",
+      "Interaction Type": "Quick Reply",
+      "Option Label": "1 | 2 | 3 | 4 | 5",
+      "Next Step": "S017 if 3/4/5 | End if 1/2",
+      "Notes": "Referral prompt must only be shown for ratings 3, 4 or 5. Ratings 1 or 2 should close without a referral ask."
+    },
+    {
+      "Step ID": "S017",
+      "Message Content (English)": "Thanks for the feedback. If SETU was useful, would you like to share it with someone who may also benefit?",
+      "Interaction Type": "Quick Reply",
+      "Option Label": "Share SETU | No, thanks",
+      "Next Step": "End",
+      "Notes": "Referral step is shown after positive feedback only. Share mechanism/link to be confirmed."
+    },
+    {
+      "Step ID": "H001",
+      "Message Content (English)": "I can help with that. Please tell me briefly what you need support with, and I’ll create a support request for the SETU team.",
+      "Interaction Type": "Free Text",
+      "Option Label": "-",
+      "Next Step": "CRM Ticket Creation",
+      "Notes": "Help/support bypasses all demographic questions. At ticket creation, collect only the information required to resolve the issue, including exact location where necessary."
+    }
+  ]
+}
