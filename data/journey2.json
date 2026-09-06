@@ -16,35 +16,30 @@
   "slots": [
     {
       "id": "state",
-      "label": "State",
       "prompt_hint": "Which state does your family currently live in?",
       "type": "state",
       "required": true
     },
     {
       "id": "household_size",
-      "label": "Household size",
       "prompt_hint": "How many people live in your household, including you?",
       "type": "number",
       "required": true
     },
     {
       "id": "children_under_18",
-      "label": "Children under 18",
       "prompt_hint": "How many children under 18 are in the household? (0 is fine)",
       "type": "number",
       "required": true
     },
     {
       "id": "members_60_plus",
-      "label": "Members aged 60+",
       "prompt_hint": "How many household members are aged 60 or above? (0 is fine)",
       "type": "number",
       "required": true
     },
     {
       "id": "family_disability",
-      "label": "Family member with disability",
       "prompt_hint": "Does anyone in the household have a disability?",
       "type": "enum",
       "options": [
@@ -56,7 +51,6 @@
     },
     {
       "id": "pregnant_or_breastfeeding",
-      "label": "Pregnant or breastfeeding",
       "prompt_hint": "Is anyone in the household pregnant or breastfeeding?",
       "type": "enum",
       "options": [
@@ -68,7 +62,6 @@
     },
     {
       "id": "primary_occupation",
-      "label": "Primary occupation",
       "prompt_hint": "What is the primary occupation of the household?",
       "type": "enum",
       "options": [
@@ -83,7 +76,6 @@
     },
     {
       "id": "household_income",
-      "label": "Household income",
       "prompt_hint": "Which range best describes your total monthly household income?",
       "type": "enum",
       "options": [
@@ -97,7 +89,6 @@
     },
     {
       "id": "housing",
-      "label": "Housing",
       "prompt_hint": "What best describes your family's housing?",
       "type": "enum",
       "options": [
@@ -111,7 +102,6 @@
     },
     {
       "id": "ration_card",
-      "label": "Ration card",
       "prompt_hint": "What type of ration card does the household have?",
       "type": "enum",
       "options": [
@@ -126,7 +116,6 @@
     },
     {
       "id": "has_insurance",
-      "label": "Health insurance",
       "prompt_hint": "Does the household have health insurance?",
       "type": "enum",
       "options": [
@@ -138,7 +127,6 @@
     },
     {
       "id": "social_category",
-      "label": "Social category",
       "prompt_hint": "Which social category would you like to select?",
       "type": "enum",
       "options": [
@@ -174,142 +162,5 @@
       "end_if": [1, 2]
     }
   },
-  "excel_steps": [
-    {
-      "Step ID": "F001",
-      "Message Content (English)": "You’ve chosen Family Schemes. I’ll ask a few short questions about your household so I can show schemes that may be relevant.",
-      "Interaction Type": "None",
-      "Option Label": "-",
-      "Next Step": "F002",
-      "Notes": "Flow 2: Family Scheme Discovery. Same hybrid style as Journey 1 — conversational collection, deterministic matching."
-    },
-    {
-      "Step ID": "F002",
-      "Message Content (English)": "Which state does your family currently live in?",
-      "Interaction Type": "Dropdown",
-      "Option Label": "State list",
-      "Next Step": "F003",
-      "Notes": "State selection. BOT is intended for citizens of India."
-    },
-    {
-      "Step ID": "F003",
-      "Message Content (English)": "How many people live in your household, including you?",
-      "Interaction Type": "Free Text",
-      "Option Label": "Number including 0",
-      "Next Step": "F004",
-      "Notes": "Accept numeric answers including 0."
-    },
-    {
-      "Step ID": "F004",
-      "Message Content (English)": "How many children under 18 are in the household?",
-      "Interaction Type": "Free Text",
-      "Option Label": "Number including 0",
-      "Next Step": "F005",
-      "Notes": "0 is a valid answer (no children)."
-    },
-    {
-      "Step ID": "F005",
-      "Message Content (English)": "How many household members are aged 60 or above?",
-      "Interaction Type": "Free Text",
-      "Option Label": "Number including 0",
-      "Next Step": "F006",
-      "Notes": "0 is a valid answer (no elders)."
-    },
-    {
-      "Step ID": "F006",
-      "Message Content (English)": "Does anyone in the household have a disability?",
-      "Interaction Type": "Quick Reply",
-      "Option Label": "Yes | No | Prefer not to say",
-      "Next Step": "F007",
-      "Notes": "-"
-    },
-    {
-      "Step ID": "F007",
-      "Message Content (English)": "Is anyone in the household pregnant or breastfeeding?",
-      "Interaction Type": "Quick Reply",
-      "Option Label": "Yes | No | Prefer not to say",
-      "Next Step": "F008",
-      "Notes": "Used to surface maternal / ICDS / PMMVY-type schemes."
-    },
-    {
-      "Step ID": "F008",
-      "Message Content (English)": "What is the primary occupation of the household?",
-      "Interaction Type": "Dropdown",
-      "Option Label": "Farmer | Labourer | Salaried | Self-employed | Unemployed | Other",
-      "Next Step": "F009",
-      "Notes": "Family occupation taxonomy is shorter than Journey 1 (no Student / Homemaker / Retired)."
-    },
-    {
-      "Step ID": "F009",
-      "Message Content (English)": "Which range best describes your total monthly household income?",
-      "Interaction Type": "Dropdown",
-      "Option Label": "Up to ₹10,000 | ₹10,001–₹30,000 | ₹30,001–₹50,000 | Above ₹50,000 | Prefer not to say",
-      "Next Step": "F010",
-      "Notes": "Same income bands as Journey 1."
-    },
-    {
-      "Step ID": "F010",
-      "Message Content (English)": "What best describes your family's housing?",
-      "Interaction Type": "Dropdown",
-      "Option Label": "Own - Pucca | Own - Kutcha | Rented | Homeless / No permanent housing | Other",
-      "Next Step": "F011",
-      "Notes": "Kutcha / rented / homeless boost housing scheme matches."
-    },
-    {
-      "Step ID": "F011",
-      "Message Content (English)": "What type of ration card does the household have?",
-      "Interaction Type": "Dropdown",
-      "Option Label": "Antyodaya (AAY) | BPL | APL | Other | None | Not sure",
-      "Next Step": "F012",
-      "Notes": "AAY / BPL used for food security and poverty-targeted schemes."
-    },
-    {
-      "Step ID": "F012",
-      "Message Content (English)": "Does the household have health insurance?",
-      "Interaction Type": "Quick Reply",
-      "Option Label": "Yes | No | Not sure",
-      "Next Step": "F013",
-      "Notes": "Insurance = No surfaces health insurance schemes (Ayushman / PM-JAY / Arogya)."
-    },
-    {
-      "Step ID": "F013",
-      "Message Content (English)": "Which social category would you like to select?",
-      "Interaction Type": "Dropdown",
-      "Option Label": "SC | ST | OBC | General | Minority",
-      "Next Step": "F014",
-      "Notes": "-"
-    },
-    {
-      "Step ID": "F014",
-      "Message Content (English)": "Here’s what I have so far. Please check your household details before I look for matching schemes.",
-      "Interaction Type": "Quick Reply",
-      "Option Label": "Proceed | Edit details",
-      "Next Step": "F015 | F002",
-      "Notes": "Deterministic confirmation gate — same as Journey 1."
-    },
-    {
-      "Step ID": "F015",
-      "Message Content (English)": "Based on the information you shared, here are the schemes that may be relevant to your family. Choose one to learn more.",
-      "Interaction Type": "List",
-      "Option Label": "Eligible scheme list",
-      "Next Step": "F016",
-      "Notes": "Family-aware eligibility scoring. Final eligibility depends on official verification."
-    },
-    {
-      "Step ID": "F016",
-      "Message Content (English)": "Here are the key details for this scheme. What would you like to do next?",
-      "Interaction Type": "Quick Reply",
-      "Option Label": "I need help | Go Back",
-      "Next Step": "H001 | F015",
-      "Notes": "Go Back returns to the matched-scheme list without re-collecting the profile."
-    },
-    {
-      "Step ID": "F017",
-      "Message Content (English)": "Would you like to go back to the main menu or end this chat?",
-      "Interaction Type": "Quick Reply",
-      "Option Label": "Main Menu | End Chat",
-      "Next Step": "S002 | S016",
-      "Notes": "Shared end menu / feedback / referral gates with Journey 1. Ratings 1–2 end; 3–5 offer referral."
-    }
-  ]
+  "excel_steps": []
 }
