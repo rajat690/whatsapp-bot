@@ -102,7 +102,7 @@
   "hard_branches": {
     "menu": {
       "Individual Schemes": "collect_profile",
-      "Family Schemes": "journey_2_stub",
+      "Family Schemes": "collect_profile",
       "I need help": "help_crm"
     },
     "confirm_profile": {

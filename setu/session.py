@@ -12,6 +12,7 @@ def default_session() -> dict[str, Any]:
     return {
         "phase": "welcome_language",
         "language": None,
+        "journey_id": None,
         "slots": {},
         "matched_schemes": [],
         "selected_scheme_sn": None,

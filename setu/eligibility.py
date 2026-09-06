@@ -46,6 +46,23 @@ def load_scheme_pool(state: str | None) -> tuple[list[dict[str, Any]], str]:
     return central, note
 
 
+def _as_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def _family_to_individual_slots(slots: dict[str, str]) -> dict[str, str]:
+    """Map Journey 2 household fields onto Journey 1 scorer inputs."""
+    mapped = dict(slots)
+    if slots.get("primary_occupation") and not mapped.get("occupation"):
+        mapped["occupation"] = slots["primary_occupation"]
+    if slots.get("family_disability") and not mapped.get("disability"):
+        mapped["disability"] = slots["family_disability"]
+    return mapped
+
+
 def _score_scheme(scheme: dict[str, Any], slots: dict[str, str]) -> tuple[int, list[str]]:
     score = 0
     reasons: list[str] = []
@@ -152,13 +169,148 @@ def _score_scheme(scheme: dict[str, Any], slots: dict[str, str]) -> tuple[int, l
     return score, reasons
 
 
-def match_schemes(slots: dict[str, str], limit: int = 8) -> tuple[list[dict[str, Any]], str]:
+def _blob(scheme: dict[str, Any]) -> str:
+    return " ".join(
+        str(scheme.get(k) or "").lower()
+        for k in (
+            "Scheme Name",
+            "Category",
+            "Age Criteria",
+            "Income Criteria",
+            "Gender / Category Criteria",
+            "Other Key Eligibility Criteria",
+            "Benefit",
+        )
+    )
+
+
+def _score_family_scheme(scheme: dict[str, Any], slots: dict[str, str]) -> tuple[int, list[str]]:
+    """Journey 1 score plus household signals (children, elders, maternal, etc.)."""
+    score, reasons = _score_scheme(scheme, _family_to_individual_slots(slots))
+    text = _blob(scheme)
+    name = (scheme.get("Scheme Name") or "").lower()
+    category = (scheme.get("Category") or "").lower()
+
+    n_children = _as_int(slots.get("children_under_18"))
+    n_elders = _as_int(slots.get("members_60_plus"))
+    n_hh = _as_int(slots.get("household_size"))
+
+    if n_children > 0 and any(
+        x in text
+        for x in (
+            "child",
+            "children",
+            "girl",
+            "adolescent",
+            "anganwadi",
+            "icds",
+            "mid-day",
+            "mid day",
+            "nutrition",
+            "school",
+            "sukanya",
+            "ladki",
+            "bhagyalakshmi",
+            "poshan",
+            "immunis",
+        )
+    ):
+        score += 4
+        reasons.append("children")
+
+    if n_elders > 0 and any(
+        x in text
+        for x in ("old age", "senior", "elderly", "pension", "60+", "65+", "igndps", "ignoaps")
+    ):
+        score += 4
+        reasons.append("elders")
+
+    pregnant = (slots.get("pregnant_or_breastfeeding") or "").lower()
+    if pregnant == "yes" and any(
+        x in text
+        for x in (
+            "maternal",
+            "maternity",
+            "pregnant",
+            "pregnan",
+            "lactat",
+            "pmmvy",
+            "janani",
+            "breastfeed",
+            "anc",
+            "jssk",
+            "newborn",
+        )
+    ):
+        score += 5
+        reasons.append("maternal")
+
+    ration = slots.get("ration_card") or ""
+    if ration in ("Antyodaya (AAY)", "BPL") and any(
+        x in text
+        for x in (
+            "bpl",
+            "aay",
+            "antyodaya",
+            "nfsa",
+            "pds",
+            "food",
+            "ration",
+            "foodgrain",
+            "anna",
+            "poverty",
+        )
+    ):
+        score += 4
+        reasons.append("ration/BPL")
+
+    housing = slots.get("housing") or ""
+    if housing in ("Own - Kutcha", "Rented", "Homeless / No permanent housing") and any(
+        x in text for x in ("housing", "pmay", "awas", "shelter", "gruh", "house", "vasati")
+    ):
+        score += 4
+        reasons.append("housing")
+        if housing.startswith("Homeless"):
+            score += 1
+
+    if (slots.get("has_insurance") or "").lower() == "no" and (
+        any(x in category for x in ("health", "insurance"))
+        or any(x in name for x in ("ayushman", "pmjay", "pm-jay", "arogya", "pm-jay"))
+        or "health insurance" in text
+    ):
+        score += 4
+        reasons.append("uninsured")
+
+    if n_hh >= 5 and any(x in category for x in ("food", "nutrition", "pds")):
+        score += 1
+
+    return score, reasons
+
+
+def _is_family_profile(slots: dict[str, str], journey_id: str | None) -> bool:
+    if journey_id == "journey_2":
+        return True
+    return any(
+        key in slots
+        for key in ("household_size", "children_under_18", "members_60_plus", "ration_card")
+    )
+
+
+def match_schemes(
+    slots: dict[str, str],
+    limit: int = 8,
+    journey_id: str | None = None,
+) -> tuple[list[dict[str, Any]], str]:
     state = slots.get("state")
     schemes, scope_note = load_scheme_pool(state)
+    family = _is_family_profile(slots, journey_id)
 
     scored: list[tuple[int, dict[str, Any], list[str]]] = []
     for scheme in schemes:
-        score, reasons = _score_scheme(scheme, slots)
+        if family:
+            score, reasons = _score_family_scheme(scheme, slots)
+        else:
+            score, reasons = _score_scheme(scheme, slots)
         if score > 0:
             scored.append((score, scheme, reasons))
 
@@ -167,9 +319,22 @@ def match_schemes(slots: dict[str, str], limit: int = 8) -> tuple[list[dict[str,
     if not scored:
         # Fallback: a few well-known central + state flagships if present
         preferred = []
+        family_keys = (
+            "pm-kisan",
+            "ayushman",
+            "pmjay",
+            "arogya",
+            "ladki bahin",
+            "anna bhagya",
+            "pmay",
+            "pmmvy",
+            "ujjwala",
+        )
+        individual_keys = ("pm-kisan", "ayushman", "pmjay", "arogya", "ladki bahin", "anna bhagya")
+        keys = family_keys if family else individual_keys
         for s in schemes:
             n = (s.get("Scheme Name") or "").lower()
-            if any(k in n for k in ("pm-kisan", "ayushman", "pmjay", "arogya", "ladki bahin", "anna bhagya")):
+            if any(k in n for k in keys):
                 preferred.append(s)
         return preferred[:limit], scope_note
 
@@ -206,7 +371,7 @@ def format_scheme_list(schemes: list[dict[str, Any]], scope_note: str = "") -> s
     return "\n".join(lines)
 
 
-def format_scheme_detail(scheme: dict[str, Any]) -> str:
+def format_scheme_detail(scheme: dict[str, Any], back_prompt: str | None = None) -> str:
     source = scheme.get("Beneficiary Count — Source Note") or ""
     link = ""
     m = re.search(r"https?://\S+", source)
@@ -228,5 +393,8 @@ def format_scheme_detail(scheme: dict[str, Any]) -> str:
     parts.append(
         "This is guidance only — please re-verify on the official site before applying."
     )
-    parts.append("Reply *help* for support, or *other schemes* to go back to the list.")
+    parts.append(
+        back_prompt
+        or "Reply *help* for support, or *other schemes* to go back to the list."
+    )
     return "\n".join(parts)

@@ -115,6 +115,82 @@ MARITAL_ALIASES = {
     "prefer not to say": "Prefer not to say",
 }
 
+FAMILY_OCCUPATIONS = {
+    "Farmer",
+    "Labourer",
+    "Salaried",
+    "Self-employed",
+    "Unemployed",
+    "Other",
+}
+
+HOUSING_ALIASES = {
+    "own - pucca": "Own - Pucca",
+    "own pucca": "Own - Pucca",
+    "pucca": "Own - Pucca",
+    "concrete": "Own - Pucca",
+    "own - kutcha": "Own - Kutcha",
+    "own kutcha": "Own - Kutcha",
+    "kutcha": "Own - Kutcha",
+    "kaccha": "Own - Kutcha",
+    "kacha": "Own - Kutcha",
+    "mud house": "Own - Kutcha",
+    "rented": "Rented",
+    "rent": "Rented",
+    "tenant": "Rented",
+    "on rent": "Rented",
+    "homeless": "Homeless / No permanent housing",
+    "no permanent housing": "Homeless / No permanent housing",
+    "no permanent": "Homeless / No permanent housing",
+    "no house": "Homeless / No permanent housing",
+    "shelter": "Homeless / No permanent housing",
+}
+
+RATION_ALIASES = {
+    "antyodaya (aay)": "Antyodaya (AAY)",
+    "antyodaya": "Antyodaya (AAY)",
+    "aay": "Antyodaya (AAY)",
+    "yellow card": "Antyodaya (AAY)",
+    "bpl": "BPL",
+    "below poverty": "BPL",
+    "below poverty line": "BPL",
+    "aph": "BPL",
+    "phh": "BPL",
+    "apl": "APL",
+    "above poverty": "APL",
+    "above poverty line": "APL",
+    "no ration": "None",
+    "without ration": "None",
+    "dont have ration": "None",
+    "don't have ration": "None",
+    "no card": "None",
+    "none": "None",
+    "not sure": "Not sure",
+    "dont know": "Not sure",
+    "don't know": "Not sure",
+    "unsure": "Not sure",
+}
+
+COUNT_WORDS = {
+    "zero": 0,
+    "none": 0,
+    "nil": 0,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+}
+
+COUNT_SLOTS = ("household_size", "children_under_18", "members_60_plus")
+
 INDIAN_STATES = [
     "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
     "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
@@ -246,6 +322,232 @@ def detect_income(text: str) -> str | None:
     return "Above ₹50,000"
 
 
+def detect_yes_no(
+    text: str,
+    *,
+    unsure_label: str | None = None,
+) -> str | None:
+    """Map yes / no / prefer-not / optional not-sure answers."""
+    n = _norm(text)
+    if "prefer not" in n:
+        return "Prefer not to say"
+    if unsure_label and any(
+        p in n for p in ("not sure", "unsure", "dont know", "don't know", "no idea")
+    ):
+        return unsure_label
+    if n in ("yes", "y") or n.startswith("yes "):
+        return "Yes"
+    if n in ("no", "n") or n.startswith("no "):
+        return "No"
+    return None
+
+
+def detect_count(
+    text: str,
+    *,
+    prefer: bool = False,
+    kind: str | None = None,
+) -> str | None:
+    """Extract a household count, including 0.
+
+    Bare numbers (and bare "no"/"none"/"zero") are used only when this is the
+    preferred slot. Opportunistic extraction requires a contextual phrase.
+    """
+    n = _norm(text)
+
+    none_phrases = {
+        "children": (
+            "no children",
+            "no kids",
+            "no child",
+            "without children",
+            "without kids",
+            "dont have kids",
+            "don't have kids",
+            "don't have children",
+            "no minors",
+        ),
+        "elders": (
+            "no elders",
+            "no elder",
+            "no seniors",
+            "no senior",
+            "nobody over 60",
+            "no one over 60",
+            "none over 60",
+            "no members 60",
+        ),
+        "household": (
+            "no one else",
+            "just me",
+            "only me",
+            "live alone",
+            "staying alone",
+        ),
+    }
+    if kind and any(p in n for p in none_phrases.get(kind, ())):
+        return "1" if kind == "household" else "0"
+    if prefer and kind != "household" and n in ("none", "zero", "nil"):
+        return "0"
+
+    contextual = False
+    if kind == "children" and any(
+        p in n for p in ("child", "kid", "minor", "under 18", "below 18")
+    ):
+        contextual = True
+    elif kind == "elders" and any(
+        p in n
+        for p in ("elder", "senior", "60", "sixty", "old age", "elderly", "grandparent")
+    ):
+        contextual = True
+    elif kind == "household" and any(
+        p in n
+        for p in (
+            "household",
+            "family of",
+            "people",
+            "members",
+            "of us",
+            "in our family",
+            "in the family",
+            "live with",
+        )
+    ):
+        contextual = True
+
+    m = re.search(r"\b(\d{1,2})\b", n)
+    if m:
+        num = int(m.group(1))
+        if 0 <= num <= 30 and (prefer or contextual):
+            return str(num)
+
+    for word, val in COUNT_WORDS.items():
+        if word in ("none", "nil", "zero") and kind == "household" and not prefer:
+            continue
+        if _contains_phrase(n, word) and (prefer or contextual):
+            if 0 <= val <= 30:
+                return str(val)
+
+    if prefer and kind in ("children", "elders") and n in ("no", "n"):
+        return "0"
+    return None
+
+
+def detect_housing(text: str, *, prefer: bool = False) -> str | None:
+    mapped = _map_alias(text, HOUSING_ALIASES)
+    if mapped:
+        return mapped
+    n = _norm(text)
+    if prefer and n == "other":
+        return "Other"
+    if prefer and n in ("own", "owned", "we own"):
+        return "Own - Pucca"
+    return None
+
+
+def detect_ration(text: str, *, prefer: bool = False) -> str | None:
+    mapped = _map_alias(text, RATION_ALIASES)
+    if mapped:
+        return mapped
+    n = _norm(text)
+    if prefer and n == "other":
+        return "Other"
+    return None
+
+
+def detect_insurance(text: str, *, prefer: bool = False) -> str | None:
+    n = _norm(text)
+    if any(p in n for p in ("not sure", "unsure", "dont know", "don't know")):
+        return "Not sure"
+    if any(
+        p in n
+        for p in (
+            "no insurance",
+            "uninsured",
+            "without insurance",
+            "don't have insurance",
+            "dont have insurance",
+            "no cover",
+        )
+    ):
+        return "No"
+    if any(
+        p in n
+        for p in (
+            "have insurance",
+            "insured",
+            "ayushman",
+            "pmjay",
+            "pm-jay",
+            "health cover",
+        )
+    ):
+        return "Yes"
+    if prefer:
+        return detect_yes_no(text, unsure_label="Not sure")
+    return None
+
+
+def detect_pregnant(text: str, *, prefer: bool = False) -> str | None:
+    n = _norm(text)
+    if "prefer not" in n:
+        return "Prefer not to say"
+    maternal = any(
+        p in n
+        for p in ("pregnant", "pregnan", "breastfeed", "lactat", "expecting", "nursing")
+    )
+    if maternal:
+        if any(p in n for p in ("not pregnant", "not breastfeeding", "no one", "nobody")):
+            return "No"
+        return "Yes"
+    if prefer:
+        return detect_yes_no(text)
+    return None
+
+
+def detect_family_disability(text: str, *, prefer: bool = False) -> str | None:
+    if prefer:
+        return detect_disability(text)
+    n = _norm(text)
+    if any(
+        p in n
+        for p in (
+            "no disability",
+            "not disabled",
+            "without disability",
+            "nobody disabled",
+            "no one disabled",
+        )
+    ):
+        return "No"
+    if any(
+        p in n
+        for p in (
+            "have a disability",
+            "has a disability",
+            "disabled",
+            "with disability",
+            "pwd",
+            "divyang",
+        )
+    ):
+        return "Yes"
+    if "prefer not" in n:
+        return "Prefer not to say"
+    return None
+
+
+def detect_primary_occupation(text: str) -> str | None:
+    v = _map_alias(text, OCCUPATION_ALIASES)
+    if v in FAMILY_OCCUPATIONS:
+        return v
+    if v:
+        return "Other"
+    if _norm(text) == "other":
+        return "Other"
+    return None
+
+
 def extract_slots(
     text: str,
     slot_defs: list[dict[str, Any]],
@@ -289,6 +591,42 @@ def extract_slots(
         v = detect_disability(text)
         if v:
             found["disability"] = v
+    elif prefer_slot == "household_size":
+        v = detect_count(text, prefer=True, kind="household")
+        if v is not None:
+            found["household_size"] = v
+    elif prefer_slot == "children_under_18":
+        v = detect_count(text, prefer=True, kind="children")
+        if v is not None:
+            found["children_under_18"] = v
+    elif prefer_slot == "members_60_plus":
+        v = detect_count(text, prefer=True, kind="elders")
+        if v is not None:
+            found["members_60_plus"] = v
+    elif prefer_slot == "family_disability":
+        v = detect_family_disability(text, prefer=True)
+        if v:
+            found["family_disability"] = v
+    elif prefer_slot == "pregnant_or_breastfeeding":
+        v = detect_pregnant(text, prefer=True)
+        if v:
+            found["pregnant_or_breastfeeding"] = v
+    elif prefer_slot == "primary_occupation":
+        v = detect_primary_occupation(text)
+        if v:
+            found["primary_occupation"] = v
+    elif prefer_slot == "housing":
+        v = detect_housing(text, prefer=True)
+        if v:
+            found["housing"] = v
+    elif prefer_slot == "ration_card":
+        v = detect_ration(text, prefer=True)
+        if v:
+            found["ration_card"] = v
+    elif prefer_slot == "has_insurance":
+        v = detect_insurance(text, prefer=True)
+        if v:
+            found["has_insurance"] = v
 
     # Opportunistic multi-slot fill (safe extractors only)
     state = detect_state(text)
@@ -300,6 +638,9 @@ def extract_slots(
     occ = _map_alias(text, OCCUPATION_ALIASES)
     if occ:
         found["occupation"] = occ
+    fam_occ = detect_primary_occupation(text)
+    if fam_occ:
+        found["primary_occupation"] = fam_occ
     income = detect_income(text)
     if income:
         found["household_income"] = income
@@ -312,6 +653,31 @@ def extract_slots(
     disability = detect_disability(text)
     if disability:
         found["disability"] = disability
+    # Family extractors: contextual only (no bare yes/no or bare numbers)
+    hh = detect_count(text, prefer=False, kind="household")
+    if hh is not None:
+        found["household_size"] = hh
+    kids = detect_count(text, prefer=False, kind="children")
+    if kids is not None:
+        found["children_under_18"] = kids
+    elders = detect_count(text, prefer=False, kind="elders")
+    if elders is not None:
+        found["members_60_plus"] = elders
+    fam_dis = detect_family_disability(text, prefer=False)
+    if fam_dis:
+        found["family_disability"] = fam_dis
+    pregnant = detect_pregnant(text, prefer=False)
+    if pregnant:
+        found["pregnant_or_breastfeeding"] = pregnant
+    housing = detect_housing(text, prefer=False)
+    if housing:
+        found["housing"] = housing
+    ration = detect_ration(text, prefer=False)
+    if ration:
+        found["ration_card"] = ration
+    insurance = detect_insurance(text, prefer=False)
+    if insurance:
+        found["has_insurance"] = insurance
 
     return {k: v for k, v in found.items() if k in allowed}
 
@@ -357,6 +723,8 @@ def detect_after_scheme(text: str) -> str | None:
     n = _norm(text)
     if "help" in n or "support" in n:
         return "I need help"
+    if "go back" in n or n in ("back", "go back"):
+        return "Go Back"
     if "other" in n or "list" in n or "back" in n or "more schemes" in n:
         return "View other schemes"
     return None
