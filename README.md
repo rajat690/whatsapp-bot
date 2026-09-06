@@ -75,3 +75,18 @@ PY
 - Interactive WhatsApp button/list replies are accepted if Meta sends them; the prototype mainly uses plain text for a conversational feel.
 - Eligibility is heuristic guidance only — always re-verify on official department sites.
 - In-memory sessions reset when Render restarts the service.
+
+
+## Conversational mode (LLM)
+
+By default the bot uses keyword NLU (deterministic feel).
+
+To make dialogue conversational, set on Render:
+
+- `OPENAI_API_KEY` (required)
+- `OPENAI_BASE_URL` (optional, default `https://api.openai.com/v1` — also works with Groq/xAI/OpenRouter-compatible endpoints)
+- `OPENAI_MODEL` (optional, default `gpt-4o-mini`)
+
+Aliases: `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`.
+
+Eligibility matching stays deterministic either way.
