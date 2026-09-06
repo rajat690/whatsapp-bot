@@ -446,10 +446,15 @@ def detect_housing(text: str, *, prefer: bool = False) -> str | None:
 
 
 def detect_ration(text: str, *, prefer: bool = False) -> str | None:
+    n = _norm(text)
+    generic = {"none", "other", "not sure", "dont know", "don't know", "unsure", "no card"}
+    if not prefer and n in generic:
+        return None
     mapped = _map_alias(text, RATION_ALIASES)
     if mapped:
+        if not prefer and mapped in ("None", "Other", "Not sure"):
+            return None
         return mapped
-    n = _norm(text)
     if prefer and n == "other":
         return "Other"
     return None
@@ -457,7 +462,7 @@ def detect_ration(text: str, *, prefer: bool = False) -> str | None:
 
 def detect_insurance(text: str, *, prefer: bool = False) -> str | None:
     n = _norm(text)
-    if any(p in n for p in ("not sure", "unsure", "dont know", "don't know")):
+    if prefer and any(p in n for p in ("not sure", "unsure", "dont know", "don't know")):
         return "Not sure"
     if any(
         p in n
@@ -490,7 +495,7 @@ def detect_insurance(text: str, *, prefer: bool = False) -> str | None:
 
 def detect_pregnant(text: str, *, prefer: bool = False) -> str | None:
     n = _norm(text)
-    if "prefer not" in n:
+    if prefer and "prefer not" in n:
         return "Prefer not to say"
     maternal = any(
         p in n
@@ -532,7 +537,7 @@ def detect_family_disability(text: str, *, prefer: bool = False) -> str | None:
         )
     ):
         return "Yes"
-    if "prefer not" in n:
+    if prefer and "prefer not" in n:
         return "Prefer not to say"
     return None
 
@@ -642,13 +647,13 @@ def extract_slots(
     if fam_occ:
         found["primary_occupation"] = fam_occ
     income = detect_income(text)
-    if income:
+    if income and (prefer_slot == "household_income" or income != "Prefer not to say"):
         found["household_income"] = income
     cat = _map_alias(text, CATEGORY_ALIASES)
     if cat:
         found["social_category"] = cat
     marital = _map_alias(text, MARITAL_ALIASES)
-    if marital:
+    if marital and (prefer_slot == "marital_status" or marital != "Prefer not to say"):
         found["marital_status"] = marital
     disability = detect_disability(text)
     if disability:

@@ -127,6 +127,23 @@ def _slot_schema(journey: dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
+def _apply_extracted(
+    session: dict[str, Any],
+    extracted: dict[str, str],
+    prefer: str | None = None,
+) -> dict[str, str]:
+    """Write extracted slots. Preferred slot may overwrite; others only fill gaps."""
+    applied: dict[str, str] = {}
+    slots = session.setdefault("slots", {})
+    for key, value in extracted.items():
+        if not value:
+            continue
+        if key == prefer or not slots.get(key):
+            slots[key] = value
+            applied[key] = value
+    return applied
+
+
 def _merge_llm_slots(raw: dict[str, Any], allowed: set[str]) -> dict[str, str]:
     out: dict[str, str] = {}
     slots = raw.get("slots") if isinstance(raw.get("slots"), dict) else raw
@@ -193,13 +210,12 @@ def _conversational_collect(session: dict[str, Any], journey: dict[str, Any], te
     if not data:
         return None
 
+    prefer = missing_ids[0] if missing_ids else None
     extracted = _merge_llm_slots(data, allowed)
-    # Also run keyword NLU as backup fill
-    extracted.update(nlu.extract_slots(text, journey["slots"], prefer_slot=missing_ids[0] if missing_ids else None))
-    # Prefer LLM values when both present
+    extracted.update(nlu.extract_slots(text, journey["slots"], prefer_slot=prefer))
     llm_only = _merge_llm_slots(data, allowed)
     extracted.update(llm_only)
-    session["slots"].update(extracted)
+    extracted = _apply_extracted(session, extracted, prefer=prefer)
 
     reply = (data.get("reply") or "").strip()
     missing_after = _missing_slots(journey, session["slots"])
@@ -407,7 +423,7 @@ def handle_message(user_id: str, text: str) -> str:
         missing_before = _missing_slots(journey, session["slots"])
         prefer = missing_before[0]["id"] if missing_before else None
         extracted = nlu.extract_slots(text, journey["slots"], prefer_slot=prefer)
-        session["slots"].update(extracted)
+        extracted = _apply_extracted(session, extracted, prefer=prefer)
 
         missing = _missing_slots(journey, session["slots"])
         if not extracted and missing:

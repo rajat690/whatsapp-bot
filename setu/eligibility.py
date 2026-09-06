@@ -237,7 +237,6 @@ def _score_family_scheme(scheme: dict[str, Any], slots: dict[str, str]) -> tuple
             "pmmvy",
             "janani",
             "breastfeed",
-            "anc",
             "jssk",
             "newborn",
         )
@@ -266,7 +265,7 @@ def _score_family_scheme(scheme: dict[str, Any], slots: dict[str, str]) -> tuple
 
     housing = slots.get("housing") or ""
     if housing in ("Own - Kutcha", "Rented", "Homeless / No permanent housing") and any(
-        x in text for x in ("housing", "pmay", "awas", "shelter", "gruh", "house", "vasati")
+        x in text for x in ("housing", "pmay", "awas", "shelter", "gruh", "vasati")
     ):
         score += 4
         reasons.append("housing")
