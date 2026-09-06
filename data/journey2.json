@@ -1,0 +1,166 @@
+{
+  "id": "journey_2_family",
+  "name": "Family Scheme Discovery",
+  "bot_name": "SETU",
+  "languages": [
+    "English",
+    "Hindi",
+    "Marathi",
+    "Kannada"
+  ],
+  "menu_options": [
+    "Individual Schemes",
+    "Family Schemes",
+    "I need help"
+  ],
+  "slots": [
+    {
+      "id": "state",
+      "prompt_hint": "Which state does your family currently live in?",
+      "type": "state",
+      "required": true
+    },
+    {
+      "id": "household_size",
+      "prompt_hint": "How many people live in your household, including you?",
+      "type": "number",
+      "required": true
+    },
+    {
+      "id": "children_under_18",
+      "prompt_hint": "How many children under 18 are in the household? (0 is fine)",
+      "type": "number",
+      "required": true
+    },
+    {
+      "id": "members_60_plus",
+      "prompt_hint": "How many household members are aged 60 or above? (0 is fine)",
+      "type": "number",
+      "required": true
+    },
+    {
+      "id": "family_disability",
+      "prompt_hint": "Does anyone in the household have a disability?",
+      "type": "enum",
+      "options": [
+        "Yes",
+        "No",
+        "Prefer not to say"
+      ],
+      "required": true
+    },
+    {
+      "id": "pregnant_or_breastfeeding",
+      "prompt_hint": "Is anyone in the household pregnant or breastfeeding?",
+      "type": "enum",
+      "options": [
+        "Yes",
+        "No",
+        "Prefer not to say"
+      ],
+      "required": true
+    },
+    {
+      "id": "primary_occupation",
+      "prompt_hint": "What is the primary occupation of the household?",
+      "type": "enum",
+      "options": [
+        "Farmer",
+        "Labourer",
+        "Salaried",
+        "Self-employed",
+        "Unemployed",
+        "Other"
+      ],
+      "required": true
+    },
+    {
+      "id": "household_income",
+      "prompt_hint": "Which range best describes your total monthly household income?",
+      "type": "enum",
+      "options": [
+        "Up to ₹10,000",
+        "₹10,001–₹30,000",
+        "₹30,001–₹50,000",
+        "Above ₹50,000",
+        "Prefer not to say"
+      ],
+      "required": true
+    },
+    {
+      "id": "housing",
+      "prompt_hint": "What best describes your family's housing?",
+      "type": "enum",
+      "options": [
+        "Own - Pucca",
+        "Own - Kutcha",
+        "Rented",
+        "Homeless / No permanent housing",
+        "Other"
+      ],
+      "required": true
+    },
+    {
+      "id": "ration_card",
+      "prompt_hint": "What type of ration card does the household have?",
+      "type": "enum",
+      "options": [
+        "Antyodaya (AAY)",
+        "BPL",
+        "APL",
+        "Other",
+        "None",
+        "Not sure"
+      ],
+      "required": true
+    },
+    {
+      "id": "has_insurance",
+      "prompt_hint": "Does the household have health insurance?",
+      "type": "enum",
+      "options": [
+        "Yes",
+        "No",
+        "Not sure"
+      ],
+      "required": true
+    },
+    {
+      "id": "social_category",
+      "prompt_hint": "Which social category would you like to select?",
+      "type": "enum",
+      "options": [
+        "SC",
+        "ST",
+        "OBC",
+        "General",
+        "Minority"
+      ],
+      "required": true
+    }
+  ],
+  "hard_branches": {
+    "menu": {
+      "Individual Schemes": "collect_profile",
+      "Family Schemes": "collect_profile",
+      "I need help": "help_crm"
+    },
+    "confirm_profile": {
+      "Proceed": "match_schemes",
+      "Edit details": "collect_profile"
+    },
+    "after_scheme_detail": {
+      "I need help": "help_crm",
+      "Go Back": "scheme_list"
+    },
+    "end_menu": {
+      "Main Menu": "main_menu",
+      "End Chat": "feedback"
+    },
+    "feedback_rating": {
+      "referral_if": [3, 4, 5],
+      "end_if": [1, 2]
+    }
+  },
+  "excel_steps": []
+}

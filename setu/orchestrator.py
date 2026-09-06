@@ -1,8 +1,9 @@
-"""Conversation-first Journey 1 orchestrator with deterministic checkpoints."""
+"""Conversation-first Journey 1 + Journey 2 orchestrator with deterministic checkpoints."""
 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,37 @@ from .session import get_session, reset_session
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
+JOURNEY_FILES = {
+    "journey_1": "journey1.json",
+    "journey_2": "journey2.json",
+}
+
+PROFILE_LABELS = {
+    "journey_1": {
+        "state": "State",
+        "age_group": "Age group",
+        "occupation": "Occupation",
+        "household_income": "Household income",
+        "social_category": "Social category",
+        "marital_status": "Marital status",
+        "disability": "Disability",
+    },
+    "journey_2": {
+        "state": "State",
+        "household_size": "Household size",
+        "children_under_18": "Children under 18",
+        "members_60_plus": "Members aged 60+",
+        "family_disability": "Family member with disability",
+        "pregnant_or_breastfeeding": "Pregnant or breastfeeding",
+        "primary_occupation": "Primary occupation",
+        "household_income": "Household income",
+        "housing": "Housing",
+        "ration_card": "Ration card",
+        "has_insurance": "Health insurance",
+        "social_category": "Social category",
+    },
+}
+
 SYSTEM_PERSONA = """You are SETU, a warm WhatsApp assistant that helps people in India discover government schemes.
 Style: short, natural chat messages (2-5 sentences max). No markdown tables. Light WhatsApp formatting (*bold*) sparingly.
 You may ask clarifying questions. Never invent scheme eligibility — the app will run a deterministic matcher.
@@ -18,8 +50,9 @@ Languages: greet/accept English, Hindi, Marathi, Kannada; reply in the user's ch
 """
 
 
-def load_journey() -> dict[str, Any]:
-    with (DATA_DIR / "journey1.json").open(encoding="utf-8") as f:
+def load_journey(journey_id: str | None = None) -> dict[str, Any]:
+    filename = JOURNEY_FILES.get(journey_id or "journey_1", "journey1.json")
+    with (DATA_DIR / filename).open(encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -31,22 +64,29 @@ def _missing_slots(journey: dict[str, Any], slots: dict[str, str]) -> list[dict[
     return missing
 
 
-def _profile_summary(slots: dict[str, str]) -> str:
-    labels = {
-        "state": "State",
-        "age_group": "Age group",
-        "occupation": "Occupation",
-        "household_income": "Household income",
-        "social_category": "Social category",
-        "marital_status": "Marital status",
-        "disability": "Disability",
-    }
+def _profile_summary(slots: dict[str, str], journey_id: str | None = None) -> str:
+    labels = PROFILE_LABELS.get(journey_id or "journey_1", PROFILE_LABELS["journey_1"])
     lines = ["Here’s what I have so far:"]
     for key, label in labels.items():
         lines.append(f"• {label}: {slots.get(key, '—')}")
     lines.append("")
     lines.append("Does this look right? Reply *Proceed* or *Edit details*.")
     return "\n".join(lines)
+
+
+def _after_detail_prompt(journey_id: str | None) -> str:
+    if journey_id == "journey_2":
+        return "Reply *I need help* or *Go Back* to the list."
+    return "Reply *help* for support, or *other schemes* to go back to the list."
+
+
+def _start_journey(session: dict[str, Any], journey_id: str) -> dict[str, Any]:
+    session["journey_id"] = journey_id
+    session["phase"] = "collect_profile"
+    session["slots"] = {}
+    session["matched_schemes"] = []
+    session["selected_scheme_sn"] = None
+    return load_journey(journey_id)
 
 
 def _ask_slot(slot: dict[str, Any]) -> str:
@@ -87,14 +127,40 @@ def _slot_schema(journey: dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
+def _apply_extracted(
+    session: dict[str, Any],
+    extracted: dict[str, str],
+    prefer: str | None = None,
+) -> dict[str, str]:
+    """Write extracted slots. Preferred slot may overwrite; others only fill gaps."""
+    applied: dict[str, str] = {}
+    slots = session.setdefault("slots", {})
+    for key, value in extracted.items():
+        if not value:
+            continue
+        if key == prefer or not slots.get(key):
+            slots[key] = value
+            applied[key] = value
+    return applied
+
+
 def _merge_llm_slots(raw: dict[str, Any], allowed: set[str]) -> dict[str, str]:
     out: dict[str, str] = {}
     slots = raw.get("slots") if isinstance(raw.get("slots"), dict) else raw
     if not isinstance(slots, dict):
         return out
     for k, v in slots.items():
-        if k in allowed and v not in (None, "", "null", "unknown"):
-            out[k] = str(v).strip()
+        if k not in allowed or v in (None, "", "null", "unknown"):
+            continue
+        text = str(v).strip()
+        if k in nlu.COUNT_SLOTS:
+            m = re.search(r"\d+", text)
+            if m:
+                num = int(m.group(0))
+                if 0 <= num <= 30:
+                    out[k] = str(num)
+            continue
+        out[k] = text
     return out
 
 
@@ -107,16 +173,27 @@ def _conversational_collect(session: dict[str, Any], journey: dict[str, Any], te
     missing_ids = [m["id"] for m in missing]
     allowed = {s["id"] for s in journey["slots"]}
 
+    journey_id = session.get("journey_id") or "journey_1"
+    journey_label = "Family Schemes" if journey_id == "journey_2" else "Individual Schemes"
+    count_note = ""
+    if journey_id == "journey_2":
+        count_note = (
+            "\nCount fields (household_size, children_under_18, members_60_plus) "
+            "must be integers and may be 0.\n"
+        )
+    else:
+        count_note = "\nAge group must be exactly one of: 0–17 | 18–59 | 60+.\n"
+
     system = (
         SYSTEM_PERSONA
-        + "\nYou are collecting a short eligibility profile for Individual Schemes.\n"
+        + f"\nYou are collecting a short eligibility profile for {journey_label}.\n"
         + "Return ONLY JSON with keys:\n"
         + '  "slots": object with any newly inferred fields from this user message,\n'
         + '  "reply": your next WhatsApp message to the user,\n'
         + '  "ready_for_confirm": boolean true only when ALL required slots are filled.\n'
         + "Required slots and allowed values:\n"
         + _slot_schema(journey)
-        + "\nAge group must be exactly one of: 0–17 | 18–59 | 60+.\n"
+        + count_note
         + "If the user asks something off-topic, answer briefly then continue collecting.\n"
         + "Do not list schemes yet. Do not claim eligibility.\n"
     )
@@ -133,13 +210,12 @@ def _conversational_collect(session: dict[str, Any], journey: dict[str, Any], te
     if not data:
         return None
 
+    prefer = missing_ids[0] if missing_ids else None
     extracted = _merge_llm_slots(data, allowed)
-    # Also run keyword NLU as backup fill
-    extracted.update(nlu.extract_slots(text, journey["slots"], prefer_slot=missing_ids[0] if missing_ids else None))
-    # Prefer LLM values when both present
+    extracted.update(nlu.extract_slots(text, journey["slots"], prefer_slot=prefer))
     llm_only = _merge_llm_slots(data, allowed)
     extracted.update(llm_only)
-    session["slots"].update(extracted)
+    extracted = _apply_extracted(session, extracted, prefer=prefer)
 
     reply = (data.get("reply") or "").strip()
     missing_after = _missing_slots(journey, session["slots"])
@@ -148,8 +224,8 @@ def _conversational_collect(session: dict[str, Any], journey: dict[str, Any], te
         session["phase"] = "confirm_profile"
         # Prefer a conversational confirm if LLM gave one, else template
         if reply and data.get("ready_for_confirm"):
-            return reply + "\n\n" + _profile_summary(session["slots"])
-        return _profile_summary(session["slots"])
+            return reply + "\n\n" + _profile_summary(session["slots"], journey_id)
+        return _profile_summary(session["slots"], journey_id)
 
     if reply:
         return reply
@@ -185,8 +261,8 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
             SYSTEM_PERSONA
             + "\nUser is at main menu. Return JSON: "
             '{"choice": "Individual Schemes"|"Family Schemes"|"I need help"|null, "reply": "..."}. '
-            "If Individual Schemes, start collecting profile conversationally (ask state first). "
-            "If Family Schemes, say coming soon and re-offer menu. "
+            "If Individual Schemes, start collecting an individual profile conversationally (ask state first). "
+            "If Family Schemes, start collecting a household profile conversationally (ask state first). "
             "If help, ask what support they need."
         )
         data = llm.chat_json(
@@ -198,18 +274,19 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
             return None
         choice = data.get("choice")
         reply = (data.get("reply") or "").strip()
-        if choice == "Family Schemes":
-            return reply or (
-                "Family Schemes is coming soon in this prototype.\n\n" + _main_menu()
-            )
         if choice == "I need help":
             session["phase"] = "help_crm"
             return reply or (
                 "Sure — tell me briefly what you need help with and I’ll raise a support request."
             )
+        if choice == "Family Schemes":
+            _start_journey(session, "journey_2")
+            return reply or (
+                "Great. I’ll ask a few quick questions about your household, in plain chat.\n\n"
+                "Which state does your family live in?"
+            )
         if choice == "Individual Schemes":
-            session["phase"] = "collect_profile"
-            session["slots"] = {}
+            _start_journey(session, "journey_1")
             return reply or (
                 "Great. I’ll ask a few quick questions about you, in plain chat.\n\n"
                 "Which state do you live in?"
@@ -239,11 +316,16 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
         scheme = next((s for s in schemes if str(s.get("SN")) == str(scheme_sn)), None)
         if not scheme:
             return None
+        offer = (
+            "End by offering *I need help* or *Go Back*."
+            if session.get("journey_id") == "journey_2"
+            else "End by offering help or other schemes."
+        )
         system = (
             SYSTEM_PERSONA
             + "\nExplain this scheme simply for WhatsApp. Return plain text only (no JSON). "
             "Include benefit, who it is for, and that official verification is needed. "
-            "End by offering help or other schemes."
+            + offer
         )
         user = json.dumps(scheme, ensure_ascii=False)[:4000]
         text_out = llm.chat_text(system, user, temperature=0.5)
@@ -256,8 +338,8 @@ def handle_message(user_id: str, text: str) -> str:
     if not text:
         return "Please send a short message and I’ll help."
 
-    journey = load_journey()
     session = get_session(user_id)
+    journey = load_journey(session.get("journey_id"))
     phase = session["phase"]
     low = text.lower().strip()
 
@@ -299,19 +381,20 @@ def handle_message(user_id: str, text: str) -> str:
         choice = nlu.detect_menu(text)
         if not choice:
             return "Please choose Individual Schemes, Family Schemes, or I need help."
-        if choice == "Family Schemes":
-            return (
-                "Family Schemes (Journey 2) is coming soon in this prototype.\n\n"
-                + _main_menu()
-            )
         if choice == "I need help":
             session["phase"] = "help_crm"
             return (
                 "I can help with that. Please tell me briefly what you need "
                 "support with, and I’ll create a support request for the SETU team."
             )
-        session["phase"] = "collect_profile"
-        session["slots"] = {}
+        if choice == "Family Schemes":
+            journey = _start_journey(session, "journey_2")
+            return (
+                "You’ve chosen Family Schemes. I’ll ask a few short questions "
+                "about your household so I can show schemes that may be relevant.\n\n"
+                + _ask_slot(journey["slots"][0])
+            )
+        journey = _start_journey(session, "journey_1")
         return (
             "You’ve chosen Individual Schemes. I’ll ask a few short questions "
             "so I can show schemes that may be relevant to you.\n\n"
@@ -340,7 +423,7 @@ def handle_message(user_id: str, text: str) -> str:
         missing_before = _missing_slots(journey, session["slots"])
         prefer = missing_before[0]["id"] if missing_before else None
         extracted = nlu.extract_slots(text, journey["slots"], prefer_slot=prefer)
-        session["slots"].update(extracted)
+        extracted = _apply_extracted(session, extracted, prefer=prefer)
 
         missing = _missing_slots(journey, session["slots"])
         if not extracted and missing:
@@ -356,7 +439,7 @@ def handle_message(user_id: str, text: str) -> str:
             return ack + _ask_slot(nxt)
 
         session["phase"] = "confirm_profile"
-        return _profile_summary(session["slots"])
+        return _profile_summary(session["slots"], session.get("journey_id"))
 
     # ---- confirm profile (deterministic branch) ----
     if phase == "confirm_profile":
@@ -383,7 +466,9 @@ def handle_message(user_id: str, text: str) -> str:
         if decision != "Proceed":
             return "Please reply *Proceed* to match schemes, or *Edit details* to change something."
 
-        matched, scope_note = eligibility.match_schemes(session["slots"])
+        matched, scope_note = eligibility.match_schemes(
+            session["slots"], journey_id=session.get("journey_id")
+        )
         session["matched_schemes"] = matched
         session["phase"] = "scheme_list"
 
@@ -422,7 +507,7 @@ def handle_message(user_id: str, text: str) -> str:
         if not chosen:
             if "edit" in low:
                 session["phase"] = "confirm_profile"
-                return _profile_summary(session["slots"])
+                return _profile_summary(session["slots"], session.get("journey_id"))
             return (
                 "Please reply with the scheme number or name from the list.\n\n"
                 + eligibility.format_scheme_list(schemes)
@@ -432,7 +517,9 @@ def handle_message(user_id: str, text: str) -> str:
         convo = _conversational_openers("scheme_detail", session, text)
         if convo:
             return convo
-        return eligibility.format_scheme_detail(chosen)
+        return eligibility.format_scheme_detail(
+            chosen, back_prompt=_after_detail_prompt(session.get("journey_id"))
+        )
 
     # ---- scheme detail ----
     if phase == "scheme_detail":
@@ -443,7 +530,7 @@ def handle_message(user_id: str, text: str) -> str:
                 "I can help with that. Please tell me briefly what you need "
                 "support with, and I’ll create a support request for the SETU team."
             )
-        if action == "View other schemes" or "other" in low or "list" in low or "back" in low:
+        if action in ("View other schemes", "Go Back") or "other" in low or "list" in low or "back" in low:
             session["phase"] = "scheme_list"
             return eligibility.format_scheme_list(session.get("matched_schemes") or [])
         schemes = session.get("matched_schemes") or []
@@ -453,7 +540,9 @@ def handle_message(user_id: str, text: str) -> str:
             convo = _conversational_openers("scheme_detail", session, text)
             if convo:
                 return convo
-            return eligibility.format_scheme_detail(chosen)
+            return eligibility.format_scheme_detail(
+                chosen, back_prompt=_after_detail_prompt(session.get("journey_id"))
+            )
         # free-text question about scheme
         if llm.llm_configured():
             scheme = next(
@@ -463,7 +552,12 @@ def handle_message(user_id: str, text: str) -> str:
             if scheme:
                 ans = llm.chat_text(
                     SYSTEM_PERSONA
-                    + "\nAnswer the user's question using only the scheme JSON. If unknown, say to check the official link. Plain text. Offer help or other schemes.",
+                    + "\nAnswer the user's question using only the scheme JSON. If unknown, say to check the official link. Plain text. "
+                    + (
+                        "Offer *I need help* or *Go Back*."
+                        if session.get("journey_id") == "journey_2"
+                        else "Offer help or other schemes."
+                    ),
                     json.dumps({"scheme": scheme, "question": text}, ensure_ascii=False)[:5000],
                     temperature=0.4,
                 )
@@ -477,8 +571,10 @@ def handle_message(user_id: str, text: str) -> str:
         choice = nlu.detect_end_choice(text)
         if choice == "Main Menu":
             session["phase"] = "main_menu"
+            session["journey_id"] = None
             session["slots"] = {}
             session["matched_schemes"] = []
+            session["selected_scheme_sn"] = None
             return _main_menu()
         if choice == "End Chat":
             session["phase"] = "feedback"
