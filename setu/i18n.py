@@ -10,7 +10,7 @@ SUPPORTED = ("English", "Hindi", "Marathi", "Kannada")
 SLOT_TOPICS: dict[str, tuple[str, ...]] = {
     "state": ("state", "rajya", "\u0930\u093e\u091c\u094d\u092f", "\u0cb0\u0cbe\u0c9c\u0ccd\u0caf"),
     "age_group": ("age group", "age", "\u0906\u092f\u0941", "\u0935\u092f\u094b\u0917\u091f", "\u0cb5\u0caf\u0ccb"),
-    "occupation": ("occupation", "\u092a\u0947\u0936\u093e", "\u0935\u094d\u092f\u0935\u0938\u093e\u092f", "farmer", "labourer", "salaried"),
+    "occupation": ("occupation", "what do you do", "\u092a\u0947\u0936\u093e", "\u0935\u094d\u092f\u0935\u0938\u093e\u092f"),
     "household_income": (
         "income",
         "household income",
@@ -19,15 +19,20 @@ SLOT_TOPICS: dict[str, tuple[str, ...]] = {
         "\u0c86\u0ca6\u0cbe\u0caf",
         "\u20b910,000",
     ),
-    "social_category": ("social category", "social", "\u0938\u093e\u092e\u093e\u091c\u093f\u0915", "obc", "minority"),
+    "social_category": ("social category", "\u0938\u093e\u092e\u093e\u091c\u093f\u0915", "obc", "minority"),
     "marital_status": ("marital", "married", "\u0935\u0948\u0935\u093e\u0939\u093f\u0915", "\u0cb5\u0cc8\u0cb5\u0cbe\u0cb9\u0cbf\u0c95"),
     "disability": ("disability", "disabled", "\u0935\u093f\u0915\u0932\u093e\u0902\u0917", "\u0905\u092a\u0902\u0917\u0924\u094d\u0935", "\u0c85\u0c82\u0c97\u0cb5\u0cc8"),
     "household_size": ("household size", "how many people", "\u0915\u093f\u0924\u0940 \u0932\u094b\u0915", "\u0c8e\u0cb7\u0ccd\u0c9f\u0cc1 \u0c9c\u0ca8"),
     "children_under_18": ("children", "under 18", "\u092e\u0941\u0932\u0947", "\u092c\u091a\u094d\u091a\u0947", "\u0cae\u0c95\u0ccd\u0c95\u0cb3"),
     "members_60_plus": ("aged 60", "60+", "members 60", "\u0935\u0930\u094d\u0937\u0947 \u0915\u093f\u0902\u0935\u093e", "\u0cb5\u0cb0\u0ccd\u0cb7"),
-    "family_disability": ("family member with disability", "anyone in the household have a disability"),
+    "family_disability": (
+        "family member with disability",
+        "anyone in the household have a disability",
+        "\u0905\u092a\u0902\u0917\u0924\u094d\u0935",
+        "\u0935\u093f\u0915\u0932\u093e\u0902\u0917",
+    ),
     "pregnant_or_breastfeeding": ("pregnant", "breastfeed", "\u0917\u0930\u094d\u092d\u0935\u0924\u0940", "\u0938\u094d\u0924\u0928\u092a\u093e\u0928", "\u0c97\u0cb0\u0ccd\u0cad\u0cbf\u0ca3\u0cbf"),
-    "primary_occupation": ("primary occupation", "household occupation"),
+    "primary_occupation": ("primary occupation", "household occupation", "\u092a\u0947\u0936\u093e", "\u0935\u094d\u092f\u0935\u0938\u093e\u092f"),
     "housing": ("housing", "pucca", "kutcha", "rented", "\u0906\u0935\u093e\u0938"),
     "ration_card": ("ration", "\u0930\u093e\u0936\u0928", "\u0936\u093f\u0927\u093e", "\u0cb0\u0cc7\u0cb7\u0ca8\u0ccd"),
     "has_insurance": ("insurance", "\u092c\u0940\u092e\u093e", "\u0935\u093f\u092e\u093e", "\u0cb5\u0cbf\u0cae\u0cc6"),
@@ -194,6 +199,12 @@ _STRINGS: dict[str, dict[str, str]] = {
         "Marathi": "\u0938\u092e\u091c\u0932\u0947 \u2014 {bits}.",
         "Kannada": "\u0cb8\u0cb0\u0cbf \u2014 {bits}.",
     },
+    "got_it_short": {
+        "English": "Got it.",
+        "Hindi": "\u0938\u092e\u091d \u0917\u092f\u093e\u0964",
+        "Marathi": "\u0938\u092e\u091c\u0932\u0947.",
+        "Kannada": "\u0cb8\u0cb0\u0cbf.",
+    },
     "main_menu": {
         "English": "What would you like to explore today?\n\u2022 Individual Schemes\n\u2022 Family Schemes\n\u2022 I need help\n\nJust type your choice in your own words.",
         "Hindi": "\u0906\u091c \u0906\u092a \u0915\u094d\u092f\u093e \u0926\u0947\u0916\u0928\u093e \u091a\u093e\u0939\u0947\u0902\u0917\u0947?\n\u2022 Individual Schemes\n\u2022 Family Schemes\n\u2022 I need help\n\n\u0905\u092a\u0928\u0947 \u0936\u092c\u094d\u0926\u094b\u0902 \u092e\u0947\u0902 \u0932\u093f\u0916\u0947\u0902\u0964",
@@ -333,36 +344,98 @@ def language_instruction(language: str | None) -> str:
     )
 
 
+def _script_counts(reply: str) -> tuple[int, int, int]:
+    n_deva = n_knda = n_latin = 0
+    for ch in reply:
+        code = ord(ch)
+        if 0x0900 <= code <= 0x097F:
+            n_deva += 1
+        elif 0x0C80 <= code <= 0x0CFF:
+            n_knda += 1
+        elif ch.isascii() and ch.isalpha():
+            n_latin += 1
+    return n_deva, n_knda, n_latin
+
+
 def reply_matches_language(reply: str, language: str | None) -> bool:
-    """True when the reply script matches the session language."""
+    """True when the reply's dominant script matches the session language.
+
+    Allows light code-mixing (a state name, an English option) so a natural
+    WhatsApp reply is not discarded for a few characters in another script.
+    """
     if not reply or not language:
         return True
-    has_deva = bool(re.search(r"[\u0900-\u097F]", reply))
-    has_knda = bool(re.search(r"[\u0C80-\u0CFF]", reply))
+    n_deva, n_knda, n_latin = _script_counts(reply)
+    letters = n_deva + n_knda + n_latin
+    if letters == 0:
+        return True
+    indic = n_deva + n_knda
     if language == "Kannada":
-        return has_knda
+        return n_knda >= 2 and n_knda >= n_deva
     if language in ("Hindi", "Marathi"):
-        return has_deva
-    return not has_deva and not has_knda
+        return n_deva >= 2 and n_deva >= n_knda
+    # English: reject a mostly Indic reply; keep a mostly-Latin one with a few native chars.
+    return indic <= max(8, letters // 4)
+
+
+def _slot_id(slot: object) -> str:
+    if isinstance(slot, dict):
+        return str(slot.get("id") or "")
+    return str(slot)
+
+
+def _topic_in_blob(blob: str, topic: str) -> bool:
+    topic_l = topic.lower()
+    if not topic_l:
+        return False
+    # Short Latin words only — keep "60+" / phrases as plain substring matches.
+    if re.fullmatch(r"[a-z]+", topic_l) and len(topic_l) <= 8:
+        return re.search(rf"\b{re.escape(topic_l)}\b", blob) is not None
+    return topic_l in blob
+
+
+def _slot_mentioned(blob: str, slot_id: str) -> bool:
+    topics = SLOT_TOPICS.get(slot_id, (slot_id.replace("_", " "),))
+    return any(_topic_in_blob(blob, topic) for topic in topics)
 
 
 def is_multi_slot_prompt(reply: str, missing_slots: list) -> bool:
-    """Detect a dump of 2+ outstanding profile questions in one message."""
+    """True only for a dump of multiple outstanding profile questions.
+
+    A natural collect turn may use two question marks (ack + ask), or a short
+    option hint for the *next* slot. Those must not be treated as dumps.
+    """
     if not reply or not missing_slots:
         return False
+    ids = [sid for sid in (_slot_id(s) for s in missing_slots) if sid]
+    if not ids:
+        return False
+
     questions = reply.count("?") + reply.count("\uff1f")
-    if questions >= 2:
-        return True
-    numbered = len(re.findall(r"(?:^|\n)\s*(?:\d+[).:]\s+|[-•*]\s+)", reply))
-    if numbered >= 3:
-        return True
+    numbered_q = len(re.findall(r"(?:^|\n)\s*\d+[).:]\s+", reply))
     blob = reply.lower()
-    hits = 0
-    for slot in missing_slots:
-        slot_id = slot["id"] if isinstance(slot, dict) else str(slot)
-        topics = SLOT_TOPICS.get(slot_id, (slot_id.replace("_", " "),))
-        if any(topic.lower() in blob for topic in topics):
-            hits += 1
-        if hits >= 2:
-            return True
+    others = [sid for sid in ids[1:] if _slot_mentioned(blob, sid)]
+
+    # Long form dumps (Journey 1 one-sentence list, Journey 2 numbered quiz).
+    if questions >= 4:
+        return True
+    if len(others) >= 2:
+        return True
+    if others and questions >= 2:
+        return True
+    if others and numbered_q >= 3:
+        return True
+    # Next-slot-only mentions, rhetorical "right?", or 2–3 option bullets: keep.
     return False
+
+
+def usable_collect_reply(reply: str, language: str | None, missing_slots: list) -> bool:
+    """Whether an LLM collect-phase reply can be shown as-is."""
+    text = (reply or "").strip()
+    if not text:
+        return False
+    if not reply_matches_language(text, language):
+        return False
+    if is_multi_slot_prompt(text, missing_slots):
+        return False
+    return True
