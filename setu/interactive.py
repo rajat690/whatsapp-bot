@@ -219,6 +219,25 @@ def _category_question_options(session: dict[str, Any], language: str | None) ->
 
 
 DETAIL_MENU_PHASES = frozenset({"named_scheme", "scheme_detail", "cat_detail"})
+LANGUAGE_PHASES = frozenset({"welcome_language", "cat_language"})
+
+
+def _collect_slot_id(session: dict[str, Any]) -> str | None:
+    if (session.get("phase") or "") != "collect_profile":
+        return None
+    if not session.get("journey_id"):
+        return session.get("collect_slot_id")
+    from . import conversation_engine as engine
+
+    slot = engine.current_collect_slot(session)
+    return (slot or {}).get("id") or session.get("collect_slot_id")
+
+
+def _list_button_label(session: dict[str, Any]) -> str:
+    phase = session.get("phase") or ""
+    lang = session.get("language")
+    slot_id = _collect_slot_id(session) if phase == "collect_profile" else None
+    return clip(i18n.interactive_list_button(lang, phase=phase, slot_id=slot_id), LIST_BUTTON_MAX)
 
 
 def finalize(session: dict[str, Any], reply: str | None) -> str:
@@ -226,8 +245,7 @@ def finalize(session: dict[str, Any], reply: str | None) -> str:
     text = reply or ""
     options = options_for_session(session)
     phase = session.get("phase") or ""
-    lang = session.get("language")
-    list_button = clip(i18n.t("interactive_choose", lang), LIST_BUTTON_MAX)
+    list_button = _list_button_label(session)
     option_rows = [{"id": oid, "title": title} for oid, title in options]
 
     if phase in DETAIL_MENU_PHASES and options:
@@ -311,6 +329,9 @@ def _short_body(session: dict[str, Any]) -> str:
         return i18n.t("who_clarify" if phase == "who_clarify" else "who_intro", lang)
     if phase == "main_menu":
         return i18n.t("main_menu_header", lang)
+    if phase in LANGUAGE_PHASES or phase == "collect_profile":
+        slot_id = _collect_slot_id(session) if phase == "collect_profile" else None
+        return i18n.interactive_list_button(lang, phase=phase, slot_id=slot_id)
     return i18n.t("interactive_choose", lang)
 
 

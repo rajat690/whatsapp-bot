@@ -419,6 +419,108 @@ _STRINGS: dict[str, dict[str, str]] = {
         "Marathi": "निवडा",
         "Kannada": "ಆಯ್ಕೆ",
     },
+    "interactive_choose_language": {
+        "English": "choose language",
+        "Hindi": "भाषा चुनें",
+        "Marathi": "भाषा निवडा",
+        "Kannada": "ಭಾಷೆ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_state": {
+        "English": "choose state",
+        "Hindi": "राज्य चुनें",
+        "Marathi": "राज्य निवडा",
+        "Kannada": "ರಾಜ್ಯ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_age_group": {
+        "English": "choose age",
+        "Hindi": "आयु चुनें",
+        "Marathi": "वय निवडा",
+        "Kannada": "ವಯಸ್ಸು ಆಯ್ಕೆ",
+    },
+    "interactive_choose_occupation": {
+        "English": "choose profession",
+        "Hindi": "पेशा चुनें",
+        "Marathi": "व्यवसाय निवडा",
+        "Kannada": "ಉದ್ಯೋಗ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_household_income": {
+        "English": "choose income",
+        "Hindi": "आय चुनें",
+        "Marathi": "उत्पन्न निवडा",
+        "Kannada": "ಆದಾಯ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_social_category": {
+        "English": "choose category",
+        "Hindi": "श्रेणी चुनें",
+        "Marathi": "श्रेणी निवडा",
+        "Kannada": "ವರ್ಗ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_marital_status": {
+        "English": "choose marital",
+        "Hindi": "वैवाहिक चुनें",
+        "Marathi": "वैवाहिक निवडा",
+        "Kannada": "ವೈವಾಹಿಕ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_disability": {
+        "English": "choose disability",
+        "Hindi": "दिव्यांग चुनें",
+        "Marathi": "अपंगत्व निवडा",
+        "Kannada": "ಅಂಗವೈಕಲ್ಯ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_household_size": {
+        "English": "choose size",
+        "Hindi": "आकार चुनें",
+        "Marathi": "आकार निवडा",
+        "Kannada": "ಗಾತ್ರ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_children_under_18": {
+        "English": "choose children",
+        "Hindi": "बच्चे चुनें",
+        "Marathi": "मुले निवडा",
+        "Kannada": "ಮಕ್ಕಳು ಆಯ್ಕೆ",
+    },
+    "interactive_choose_members_60_plus": {
+        "English": "choose 60+",
+        "Hindi": "60+ चुनें",
+        "Marathi": "60+ निवडा",
+        "Kannada": "60+ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_family_disability": {
+        "English": "choose disability",
+        "Hindi": "दिव्यांग चुनें",
+        "Marathi": "अपंगत्व निवडा",
+        "Kannada": "ಅಂಗವೈಕಲ್ಯ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_pregnant_or_breastfeeding": {
+        "English": "choose maternity",
+        "Hindi": "गर्भ चुनें",
+        "Marathi": "गर्भ निवडा",
+        "Kannada": "ಗರ್ಭ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_primary_occupation": {
+        "English": "choose profession",
+        "Hindi": "पेशा चुनें",
+        "Marathi": "व्यवसाय निवडा",
+        "Kannada": "ಉದ್ಯೋಗ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_housing": {
+        "English": "choose housing",
+        "Hindi": "आवास चुनें",
+        "Marathi": "घर निवडा",
+        "Kannada": "ವಸತಿ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_ration_card": {
+        "English": "choose ration",
+        "Hindi": "राशन चुनें",
+        "Marathi": "शिधा निवडा",
+        "Kannada": "ರೇಷನ್ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_has_insurance": {
+        "English": "choose insurance",
+        "Hindi": "बीमा चुनें",
+        "Marathi": "विमा निवडा",
+        "Kannada": "ವಿಮೆ ಆಯ್ಕೆ",
+    },
     "menu_unclear": {
         "English": "Please choose 1 Individual, 2 Family, 3 Browse category, or 4 I need help.",
         "Hindi": "कृपया 1 व्यक्तिगत, 2 परिवार, या 3 श्रेणी से खोजें चुनें। सहायता के लिए I need help लिखें।",
@@ -427,15 +529,15 @@ _STRINGS: dict[str, dict[str, str]] = {
     },
     "family_intro": {
         "English": "You've chosen Family Schemes. I'll ask a few short questions about your household so I can show schemes that may be relevant.",
-        "Hindi": "\u0906\u092a\u0928\u0947 Family Schemes \u091a\u0941\u0928\u093e \u0939\u0948\u0964 \u092e\u0948\u0902 \u092a\u0930\u093f\u0935\u093e\u0930 \u0915\u0947 \u092c\u093e\u0930\u0947 \u092e\u0947\u0902 \u0915\u0941\u091b \u091b\u094b\u091f\u0947 \u0938\u0935\u093e\u0932 \u092a\u0942\u091b\u0942\u0901\u0917\u093e\u0964",
-        "Marathi": "\u0924\u0941\u092e\u094d\u0939\u0940 Family Schemes \u0928\u093f\u0935\u0921\u0932\u0947 \u0906\u0939\u0947. \u092e\u0940 \u0915\u0941\u091f\u0941\u0902\u092c\u093e\u092c\u0926\u094d\u0926\u0932 \u0915\u093e\u0939\u0940 \u091b\u094b\u091f\u0947 \u092a\u094d\u0930\u0936\u094d\u0928 \u0935\u093f\u091a\u093e\u0930\u0947\u0928.",
-        "Kannada": "\u0ca8\u0c80\u0cb5\u0cc1 Family Schemes \u0c86\u0caf\u0ccd\u0c95\u0cc6 \u0cae\u0cbe\u0ca1\u0cbf\u0ca6\u0ccd\u0ca6\u0cc0\u0cb0\u0cbf. \u0ca8\u0cbe\u0ca8\u0cc1 \u0ca8\u0cbf\u0cae\u0ccd\u0cae \u0c95\u0cc1\u0c9f\u0cc1\u0c82\u0cac\u0ca6 \u0cac\u0c97\u0ccd\u0c97\u0cc6 \u0c95\u0cc6\u0cb2\u0cb5\u0cc1 \u0c9a\u0cbf\u0c95\u0ccd\u0c95 \u0caa\u0ccd\u0cb0\u0cb6\u0ccd\u0ca8\u0cc6\u0c97\u0cb3\u0ca8\u0ccd\u0ca8\u0cc1 \u0c95\u0cc7\u0cb3\u0cc1\u0ca4\u0ccd\u0ca4\u0cc7\u0ca8\u0cc6.",
+        "Hindi": "आपने परिवार योजनाएँ चुना है। मैं परिवार के बारे में कुछ छोटे सवाल पूछूँगा।",
+        "Marathi": "तुम्ही कुटुंब योजना निवडले आहे. मी कुटुंबाबद्दल काही छोटे प्रश्न विचारेन.",
+        "Kannada": "ನೀವು ಕುಟುಂಬ ಯೋಜನೆಗಳು ಆಯ್ಕೆ ಮಾಡಿದ್ದೀರಿ. ನಾನು ನಿಮ್ಮ ಕುಟುಂಬದ ಬಗ್ಗೆ ಕೆಲವು ಚಿಕ್ಕ ಪ್ರಶ್ನೆಗಳನ್ನು ಕೇಳುತ್ತೇನೆ.",
     },
     "individual_intro": {
         "English": "You've chosen Individual Schemes. I'll ask a few short questions so I can show schemes that may be relevant to you.",
-        "Hindi": "\u0906\u092a\u0928\u0947 Individual Schemes \u091a\u0941\u0928\u093e \u0939\u0948\u0964 \u092e\u0948\u0902 \u0915\u0941\u091b \u091b\u094b\u091f\u0947 \u0938\u0935\u093e\u0932 \u092a\u0942\u091b\u0942\u0901\u0917\u093e\u0964",
-        "Marathi": "\u0924\u0941\u092e\u094d\u0939\u0940 Individual Schemes \u0928\u093f\u0935\u0921\u0932\u0947 \u0906\u0939\u0947. \u092e\u0940 \u0915\u093e\u0939\u0940 \u091b\u094b\u091f\u0947 \u092a\u094d\u0930\u0936\u094d\u0928 \u0935\u093f\u091a\u093e\u0930\u0947\u0928.",
-        "Kannada": "\u0ca8\u0c80\u0cb5\u0cc1 Individual Schemes \u0c86\u0caf\u0ccd\u0c95\u0cc6 \u0cae\u0cbe\u0ca1\u0cbf\u0ca6\u0ccd\u0ca6\u0cc0\u0cb0\u0cbf. \u0ca8\u0cbe\u0ca8\u0cc1 \u0c95\u0cc6\u0cb2\u0cb5\u0cc1 \u0c9a\u0cbf\u0c95\u0ccd\u0c95 \u0caa\u0ccd\u0cb0\u0cb6\u0ccd\u0ca8\u0cc6\u0c97\u0cb3\u0ca8\u0ccd\u0ca8\u0cc1 \u0c95\u0cc7\u0cb3\u0cc1\u0ca4\u0ccd\u0ca4\u0cc7\u0ca8\u0cc6.",
+        "Hindi": "आपने व्यक्तिगत योजनाएँ चुना है। मैं कुछ छोटे सवाल पूछूँगा।",
+        "Marathi": "तुम्ही वैयक्तिक योजना निवडले आहे. मी काही छोटे प्रश्न विचारेन.",
+        "Kannada": "ನೀವು ವೈಯಕ್ತಿಕ ಯೋಜನೆಗಳು ಆಯ್ಕೆ ಮಾಡಿದ್ದೀರಿ. ನಾನು ಕೆಲವು ಚಿಕ್ಕ ಪ್ರಶ್ನೆಗಳನ್ನು ಕೇಳುತ್ತೇನೆ.",
     },
     "help_intro": {
         "English": "I can help with that. Please tell me briefly what you need support with, and I'll create a support request for the SETU team.",
@@ -865,6 +967,25 @@ def t(key: str, language: str | None, **kwargs: str) -> str:
     packed = _STRINGS.get(key) or {}
     template = packed.get(lang) or packed.get("English") or key
     return template.format(**kwargs) if kwargs else template
+
+
+_LANGUAGE_CHOOSE_PHASES = frozenset({"welcome_language", "cat_language"})
+
+
+def interactive_list_button(
+    language: str | None,
+    *,
+    phase: str | None = None,
+    slot_id: str | None = None,
+) -> str:
+    """WhatsApp list-button title: language picker, collect slot, or generic Choose."""
+    if phase in _LANGUAGE_CHOOSE_PHASES:
+        return t("interactive_choose_language", language)
+    if slot_id:
+        key = f"interactive_choose_{slot_id}"
+        if key in _STRINGS:
+            return t(key, language)
+    return t("interactive_choose", language)
 
 
 def slot_prompt(slot_id: str, language: str | None, fallback: str | None = None) -> str:
