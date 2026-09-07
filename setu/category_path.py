@@ -2,6 +2,9 @@
 
 Does not mutate Journey 1 / Journey 2 slot collection. Existing sessions without
 path=category never enter this module.
+
+`start()` is menu button 3 (language → state → hub).
+`start_for_category()` is a free-text topic keyword (language if needed → state → pack).
 """
 
 from __future__ import annotations
@@ -10,23 +13,56 @@ import re
 from typing import Any
 
 from . import category_catalog as cat
-from . import eligibility, i18n, nlu
+from . import category_intent, eligibility, i18n, nlu
 
 
 def start(session: dict[str, Any]) -> str:
     """Enter the category path from main menu button 3 only."""
+    _reset_category_session(session, category_id=None)
+    session["phase"] = "cat_language"
+    return _language_prompt(session)
+
+
+def start_for_category(
+    session: dict[str, Any],
+    category_id: str,
+    language: str | None = None,
+) -> str:
+    """Enter a known pack from free-text intent — skip the hub."""
+    _reset_category_session(session, category_id=category_id)
+    if language:
+        session["language"] = language
+    lang = session.get("language")
+    label = cat.label_of(category_id, lang)
+    ack = i18n.t("cat_intent_ack", lang, category=label)
+    if not session.get("language"):
+        session["phase"] = "cat_language"
+        return ack + "\n\n" + _language_prompt(session)
+    session["phase"] = "cat_state_scope"
+    return ack + "\n\n" + _state_scope_prompt(session)
+
+
+def _reset_category_session(session: dict[str, Any], category_id: str | None) -> None:
     session["path"] = cat.PATH_FLAG
     session["journey_id"] = cat.WORKFLOW_ID
-    session["phase"] = "cat_language"
     session["slots"] = {}
     session["matched_schemes"] = []
     session["selected_scheme_sn"] = None
-    session["category_id"] = None
+    session["category_id"] = category_id
     session["state_scope"] = None
     session["hub_screen"] = 1
     session["pension_slice"] = False
     session["cat_q_index"] = 0
-    return _language_prompt(session)
+
+
+def _after_state_ready(session: dict[str, Any]) -> str:
+    """Hub when browsing; pack questions when the category is already known."""
+    cid = session.get("category_id")
+    if cid and cid in cat.PACKS:
+        return _begin_pack(session, cid)
+    session["phase"] = "cat_hub"
+    session["hub_screen"] = 1
+    return _hub_prompt(session)
 
 
 def replay_after_language_switch(session: dict[str, Any]) -> str:
@@ -261,14 +297,10 @@ def _on_state_scope(session: dict[str, Any], text: str) -> str:
         state = nlu.detect_state(text)
         if state == "Karnataka":
             _apply_scope(session, "karnataka")
-            session["phase"] = "cat_hub"
-            session["hub_screen"] = 1
-            return _hub_prompt(session)
+            return _after_state_ready(session)
         if state == "Maharashtra":
             _apply_scope(session, "maharashtra")
-            session["phase"] = "cat_hub"
-            session["hub_screen"] = 1
-            return _hub_prompt(session)
+            return _after_state_ready(session)
         return i18n.t("cat_pick_number", session.get("language")) + "\n\n" + _state_scope_prompt(session)
     scope_id = cat.STATE_SCOPES[idx]["id"]
     if scope_id == "state_central":
@@ -276,9 +308,7 @@ def _on_state_scope(session: dict[str, Any], text: str) -> str:
         lang = session.get("language")
         return i18n.t("cat_state_plus_prompt", lang) + "\n\n" + _numbered(cat.STATE_PLUS_CENTRAL, lang)
     _apply_scope(session, scope_id)
-    session["phase"] = "cat_hub"
-    session["hub_screen"] = 1
-    return _hub_prompt(session)
+    return _after_state_ready(session)
 
 
 def _on_state_plus(session: dict[str, Any], text: str) -> str:
@@ -287,9 +317,7 @@ def _on_state_plus(session: dict[str, Any], text: str) -> str:
         state = nlu.detect_state(text)
         if state in ("Karnataka", "Maharashtra"):
             _apply_scope(session, "state_central", state)
-            session["phase"] = "cat_hub"
-            session["hub_screen"] = 1
-            return _hub_prompt(session)
+            return _after_state_ready(session)
         return (
             i18n.t("cat_pick_number", session.get("language"))
             + "\n\n"
@@ -299,9 +327,7 @@ def _on_state_plus(session: dict[str, Any], text: str) -> str:
         )
     state = "Karnataka" if cat.STATE_PLUS_CENTRAL[idx]["id"] == "karnataka" else "Maharashtra"
     _apply_scope(session, "state_central", state)
-    session["phase"] = "cat_hub"
-    session["hub_screen"] = 1
-    return _hub_prompt(session)
+    return _after_state_ready(session)
 
 
 def _hub_ids(session: dict[str, Any]) -> list[str]:
@@ -324,6 +350,9 @@ def _on_hub(session: dict[str, Any], text: str) -> str:
     ids = _hub_ids(session)
     idx = _pick(text, ids, session.get("language"))
     if idx is None:
+        typed = category_intent.detect_category_intent(text)
+        if typed and typed in cat.PACKS:
+            return _begin_pack(session, typed)
         return i18n.t("cat_pick_number", session.get("language")) + "\n\n" + _hub_prompt(session)
     chosen = ids[idx]
     if chosen == "more":

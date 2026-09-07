@@ -15,7 +15,7 @@ Conversation-first WhatsApp prototype for discovering government schemes (Centra
 
 **Journey 2 — Family Schemes:** household size, children under 18, members 60+, family disability, pregnant/breastfeeding, primary occupation, income, housing, ration card, insurance, social category. Counts accept **0**.
 
-**Category path (`schemes_by_category_v1`, `path=category`):** menu button 3 only. Language → state scope → category hub (two WhatsApp-list-sized screens) → ≤4 questions → numbered results. Existing Individual / Family sessions are untouched.
+**Category path (`schemes_by_category_v1`, `path=category`):** menu button 3, or a free-text category keyword (scholarship, pension, housing, … EN/HI). Language → state scope → category hub (skipped when the topic is already known) → ≤4 questions → numbered results. Existing Individual / Family sessions are untouched. A named scheme (Ujjwala, Stree Shakti, …) wins over a category word when both could match.
 
 ## Layout
 
@@ -23,6 +23,7 @@ Conversation-first WhatsApp prototype for discovering government schemes (Centra
 - `setu/orchestrator.py` — Journey 1 + Journey 2 conversation flow (`session["journey_id"]`); dispatches `path=category` to the isolated handler
 - `setu/category_path.py` — Browse-by-category tree (does not reuse Journey 1/2 collect phases)
 - `setu/category_catalog.py` — hubs, ≤4-question packs, best-effort tag keywords
+- `setu/category_intent.py` — free-text category keyword → pack (named-scheme lookup wins when present)
 - `setu/nlu.py` — keyword/slot extraction (no LLM required; family counts including 0)
 - `setu/eligibility.py` — deterministic matcher (family-aware scoring for Journey 2; `match_category_schemes` for the category path)
 - `setu/llm.py` — optional OpenAI-compatible dialogue layer
@@ -50,7 +51,7 @@ Same as before:
 Keyword NLU works without an API key. Individual, Family, and category paths:
 
 ```bash
-python -m unittest tests.test_language_and_slots tests.test_category_path
+python -m unittest tests.test_language_and_slots tests.test_category_path tests.test_category_intent
 ```
 
 ```bash

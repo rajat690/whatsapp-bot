@@ -385,6 +385,18 @@ _STRINGS: dict[str, dict[str, str]] = {
         "Marathi": "Reply *Back* for the numbered list, *Back to categories*, *Main menu*, or *help*.",
         "Kannada": "Reply *Back* for the numbered list, *Back to categories*, *Main menu*, or *help*.",
     },
+    "cat_intent_ack": {
+        "English": "Looking at *{category}* schemes.",
+        "Hindi": "*{category}* योजनाएँ देख रहे हैं।",
+        "Marathi": "*{category}* योजना पाहत आहोत.",
+        "Kannada": "Looking at *{category}* schemes.",
+    },
+    "cat_unknown": {
+        "English": "I don't have a topic pack for that yet. You can *3 Browse category*, choose Individual / Family, or type *I need help*.",
+        "Hindi": "उस विषय की श्रेणी अभी नहीं है। *3 श्रेणी से खोजें*, व्यक्तिगत / परिवार चुनें, या *I need help* लिखें।",
+        "Marathi": "I don't have a topic pack for that yet. You can *3 Browse category*, choose Individual / Family, or type *I need help*.",
+        "Kannada": "I don't have a topic pack for that yet. You can *3 Browse category*, choose Individual / Family, or type *I need help*.",
+    },
 }
 
 
