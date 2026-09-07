@@ -58,6 +58,7 @@ Always reply in the session language. Never revert to an earlier language.
 If the user asks to shift/switch/change to English, Hindi, Marathi, or Kannada, continue in that language. Do not refuse.
 During profile collection: acknowledge what the user just said in plain words, then ask EXACTLY ONE outstanding fact.
 Never list, number, or combine remaining questions. Never paste option menus for several fields.
+Never list, bullet, or name schemes. Numbered scheme lists are produced by the app, not by you.
 """
 
 
@@ -407,8 +408,9 @@ def _handle_named_scheme_intent(session: dict[str, Any], text: str) -> str | Non
         if chosen:
             session["phase"] = "named_scheme"
             session["selected_scheme_sn"] = chosen.get("SN")
+            _stash_named_next_options(session)
             return lookup.format_named_scheme_detail(
-                chosen, _named_next_prompt(session), language=session.get("language")
+                chosen, next_prompt="", language=session.get("language")
             )
         action = _detect_named_next(session, text)
         # Numbers belong to the scheme list while it is on screen.
@@ -1414,23 +1416,11 @@ def _handle_message_inner(user_id: str, text: str) -> str:
         session["matched_schemes"] = matched
         session["phase"] = "scheme_list"
 
-        listing = eligibility.format_scheme_list(
+        # Rules own the list body: scope note + intro + numbered lines + footer.
+        # Never prepend LLM prose (it dumps unnumbered bullets in production).
+        return eligibility.format_scheme_list(
             matched, scope_note=scope_note, language=session.get("language")
         )
-        if llm.llm_configured():
-            intro = llm.chat_text(
-                SYSTEM_PERSONA
-                + i18n.language_instruction(session.get("language"))
-                + "\nWrite a short warm intro (1-2 sentences) before a scheme list. "
-                "Plain text. Do not list, number, or name any schemes.",
-                json.dumps({"slots": session["slots"], "count": len(matched)}, ensure_ascii=False),
-                temperature=0.5,
-            )
-            if intro and not i18n.claims_single_language_lock(intro) and not re.search(
-                r"(?m)^\d+\.\s", intro
-            ):
-                return intro + "\n\n" + listing
-        return listing
 
     # ---- scheme list ----
     if phase == "scheme_list":
@@ -1452,7 +1442,9 @@ def _handle_message_inner(user_id: str, text: str) -> str:
                 if 0 <= idx < len(schemes):
                     chosen = schemes[idx]
             elif data and _safe_user_reply(data.get("reply")) and not chosen:
-                return _safe_user_reply(data.get("reply"))
+                clarify = _safe_user_reply(data.get("reply"))
+                if clarify and not eligibility.llm_lists_schemes(clarify):
+                    return clarify
         if not chosen:
             if "edit" in low:
                 session["phase"] = "confirm_profile"

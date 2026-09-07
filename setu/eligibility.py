@@ -405,6 +405,11 @@ def match_schemes(
     return results, scope_note
 
 
+_BULLET_SCHEME_ROW = re.compile(r"(?m)^[ \t]*[•●▪‣*]\s+\S.*$")
+_HYPHEN_SCHEME_ROW = re.compile(r"(?m)^[ \t]*[-–—]\s+[A-Za-z\u0900-\u0D7F].+$")
+_NUMBERED_SCHEME_ROW = re.compile(r"(?m)^\d+\.\s+\S")
+
+
 def numbered_scheme_lines(
     schemes: list[dict[str, Any]],
     language: str | None = None,
@@ -418,6 +423,49 @@ def numbered_scheme_lines(
         name = s.get("Scheme Name") or "Scheme"
         lines.append(f"{i}. {name}{tag}")
     return lines
+
+
+def has_bullet_scheme_list(text: str | None) -> bool:
+    """True when free-text dumped schemes as bullets (the live duplicate-list bug)."""
+    blob = text or ""
+    if len(_BULLET_SCHEME_ROW.findall(blob)) >= 1:
+        return True
+    return len(_HYPHEN_SCHEME_ROW.findall(blob)) >= 2
+
+
+def llm_lists_schemes(text: str | None) -> bool:
+    """Reject LLM prose that names schemes as bullets or a parallel numbered dump."""
+    blob = text or ""
+    if has_bullet_scheme_list(blob):
+        return True
+    return len(_NUMBERED_SCHEME_ROW.findall(blob)) >= 2
+
+
+def drop_scheme_dump_prefix(text: str | None) -> str:
+    """Strip unnumbered bullet/hyphen scheme dumps; keep the numbered formatter block."""
+    blob = text or ""
+    if not has_bullet_scheme_list(blob):
+        return blob
+    cleaned = _BULLET_SCHEME_ROW.sub("", blob)
+    cleaned = _HYPHEN_SCHEME_ROW.sub("", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    numbered = _NUMBERED_SCHEME_ROW.search(cleaned)
+    if numbered:
+        before = cleaned[: numbered.start()]
+        # Drop leftover LLM lead-in that only existed to introduce the bullet dump.
+        if re.search(r"(useful schemes|आपके लिए कुछ उपयोगी|उपयोगी योजनाएँ हैं)", before, re.I):
+            # Keep a trailing scope note / intro paragraph if present after the dump.
+            parts = [p.strip() for p in before.split("\n\n") if p.strip()]
+            keep: list[str] = []
+            for part in parts:
+                if llm_lists_schemes(part) or has_bullet_scheme_list(part):
+                    continue
+                if re.search(r"(useful schemes|आपके लिए कुछ उपयोगी|उपयोगी योजनाएँ हैं)", part, re.I):
+                    continue
+                keep.append(part)
+            before = "\n\n".join(keep)
+        cleaned = (before.rstrip() + "\n\n" + cleaned[numbered.start() :]).strip()
+    return cleaned
 
 
 def format_scheme_list(

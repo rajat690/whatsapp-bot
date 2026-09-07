@@ -419,6 +419,12 @@ _STRINGS: dict[str, dict[str, str]] = {
         "Marathi": "निवडा",
         "Kannada": "ಆಯ್ಕೆ",
     },
+    "interactive_choose_scheme": {
+        "English": "Choose scheme",
+        "Hindi": "योजना चुनें",
+        "Marathi": "योजना निवडा",
+        "Kannada": "ಯೋಜನೆ ಆಯ್ಕೆ",
+    },
     "menu_unclear": {
         "English": "Please choose 1 Individual, 2 Family, 3 Browse category, or 4 I need help.",
         "Hindi": "कृपया 1 व्यक्तिगत, 2 परिवार, या 3 श्रेणी से खोजें चुनें। सहायता के लिए I need help लिखें।",

@@ -10,6 +10,7 @@ Conversation-first WhatsApp prototype for discovering government schemes (Centra
   - Named-scheme lookup (e.g. “tell me about Ujjwala”) against the same libraries — hit or honest miss, never invented facts or End Chat
   - Hard branches: Individual / Family / Browse category / Help → CRM, Proceed vs Edit, after-detail help / go back, Main Menu vs End Chat, feedback ratings
   - Confirmed slots used for matching
+  - **Scheme lists** are a numbered rule-engine formatter (`N. Name [Central|State]`) plus WhatsApp interactive rows — never an LLM bullet dump
   - **Browse by category** is a structured, isolated tree (not LLM profile collection)
 
 **Journey 1 — Individual Schemes:** after language + state + consent, at most 4 prompted questions (age, occupation, income, social category). Marital/disability are stored if volunteered.
@@ -56,7 +57,7 @@ Same as before:
 Keyword NLU works without an API key. Individual, Family, and category paths:
 
 ```bash
-python -m unittest tests.test_language_and_slots tests.test_category_path tests.test_category_intent tests.test_named_scheme tests.test_consent_and_interactive tests.test_profile_intent tests.test_conversation_engine tests.test_greetings
+python -m unittest tests.test_language_and_slots tests.test_category_path tests.test_category_intent tests.test_named_scheme tests.test_consent_and_interactive tests.test_profile_intent tests.test_conversation_engine tests.test_greetings tests.test_scheme_list
 ```
 
 ```bash
