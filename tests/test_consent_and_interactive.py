@@ -9,6 +9,7 @@ from setu.interactive import (
     parse_inbound_message,
     spec_mode,
 )
+from setu import i18n
 from setu.orchestrator import handle_message
 from setu.session import get_session, reset_session
 from tests.helpers import accept_consent
@@ -216,6 +217,157 @@ class InteractiveInboundTests(unittest.TestCase):
         outbound = get_session(uid).get("outbound") or {}
         ids = [row["id"] for row in outbound.get("options") or []]
         self.assertEqual(ids, ["Accept", "Decline"])
+
+
+class LanguageAndIntroCopyTests(unittest.TestCase):
+    def test_welcome_language_list_button_says_choose_language(self):
+        uid = "copy-lang-btn"
+        reset_session(uid)
+        handle_message(uid, "hi")
+        session = get_session(uid)
+        self.assertEqual(session["phase"], "welcome_language")
+        outbound = session.get("outbound") or {}
+        self.assertEqual(outbound.get("list_button"), "choose language")
+        self.assertEqual(outbound.get("short_body"), "choose language")
+        self.assertLessEqual(len(outbound.get("list_button") or ""), 20)
+
+    def test_main_menu_keeps_generic_choose(self):
+        uid = "copy-menu-btn"
+        reset_session(uid)
+        handle_message(uid, "hi")
+        handle_message(uid, "English")
+        session = get_session(uid)
+        self.assertEqual(session["phase"], "main_menu")
+        outbound = session.get("outbound") or {}
+        self.assertEqual(outbound.get("list_button"), "Choose")
+        handle_message(uid, "switch to hindi")
+        session = get_session(uid)
+        self.assertEqual(session["language"], "Hindi")
+        self.assertEqual(session["phase"], "main_menu")
+        self.assertEqual((session.get("outbound") or {}).get("list_button"), "चुनें")
+
+    def test_hindi_individual_intro_uses_localized_menu_name(self):
+        uid = "copy-hi-intro"
+        reset_session(uid)
+        handle_message(uid, "hi")
+        handle_message(uid, "Hindi")
+        reply = handle_message(uid, "1")
+        self.assertIn("व्यक्तिगत योजनाएँ", reply)
+        self.assertNotIn("Individual Schemes", reply)
+        self.assertIn(i18n.t("menu_opt_individual", "Hindi"), i18n.t("individual_intro", "Hindi"))
+
+    def test_hindi_family_intro_uses_localized_menu_name(self):
+        uid = "copy-hi-fam"
+        reset_session(uid)
+        handle_message(uid, "hi")
+        handle_message(uid, "Hindi")
+        reply = handle_message(uid, "2")
+        self.assertIn("परिवार योजनाएँ", reply)
+        self.assertNotIn("Family Schemes", reply)
+        self.assertIn(i18n.t("menu_opt_family", "Hindi"), i18n.t("family_intro", "Hindi"))
+
+    def test_english_intros_keep_scheme_titles(self):
+        self.assertIn("Individual Schemes", i18n.t("individual_intro", "English"))
+        self.assertIn("Family Schemes", i18n.t("family_intro", "English"))
+        self.assertNotIn("Individual Schemes", i18n.t("individual_intro", "Marathi"))
+        self.assertNotIn("Family Schemes", i18n.t("family_intro", "Kannada"))
+        self.assertIn(i18n.t("menu_opt_individual", "Marathi"), i18n.t("individual_intro", "Marathi"))
+        self.assertIn(i18n.t("menu_opt_family", "Kannada"), i18n.t("family_intro", "Kannada"))
+
+    def test_choose_language_labels_fit_whatsapp_limit(self):
+        from setu.interactive import LIST_BUTTON_MAX
+
+        for lang in ("English", "Hindi", "Marathi", "Kannada"):
+            label = i18n.t("interactive_choose_language", lang)
+            self.assertLessEqual(len(label), LIST_BUTTON_MAX, msg=f"{lang}: {label}")
+            self.assertNotEqual(label.lower(), "choose")
+        self.assertEqual(i18n.t("interactive_choose_language", "English"), "choose language")
+        self.assertEqual(i18n.t("interactive_choose_language", "Hindi"), "भाषा चुनें")
+
+
+class CollectListButtonCopyTests(unittest.TestCase):
+    def test_individual_collect_list_buttons_name_the_slot(self):
+        uid = "copy-j1-slots"
+        reset_session(uid)
+        handle_message(uid, "hi")
+        handle_message(uid, "English")
+        handle_message(uid, "1")
+        handle_message(uid, "Karnataka")
+        handle_message(uid, "Accept")
+        expected = [
+            ("age_group", "choose age", "28"),
+            ("occupation", "choose profession", "salaried"),
+            ("household_income", "choose income", "25000"),
+            ("social_category", "choose category", "OBC"),
+        ]
+        for slot_id, label, answer in expected:
+            session = get_session(uid)
+            self.assertEqual(session["phase"], "collect_profile", msg=slot_id)
+            self.assertEqual(session.get("collect_slot_id"), slot_id)
+            outbound = session.get("outbound") or {}
+            self.assertEqual(outbound.get("list_button"), label, msg=slot_id)
+            self.assertNotEqual(outbound.get("list_button"), "Choose")
+            self.assertLessEqual(len(label), 20)
+            handle_message(uid, answer)
+        self.assertEqual(get_session(uid)["phase"], "confirm_profile")
+        confirm_btn = (get_session(uid).get("outbound") or {}).get("list_button")
+        self.assertEqual(confirm_btn, "Choose")
+
+    def test_hindi_collect_age_button_is_localized(self):
+        uid = "copy-hi-age-btn"
+        reset_session(uid)
+        handle_message(uid, "hi")
+        handle_message(uid, "Hindi")
+        handle_message(uid, "1")
+        handle_message(uid, "Karnataka")
+        handle_message(uid, "Accept")
+        session = get_session(uid)
+        self.assertEqual(session["phase"], "collect_profile")
+        self.assertEqual(session.get("collect_slot_id"), "age_group")
+        self.assertEqual((session.get("outbound") or {}).get("list_button"), "आयु चुनें")
+        self.assertNotEqual((session.get("outbound") or {}).get("list_button"), "चुनें")
+
+    def test_consent_buttons_are_not_generic_choose(self):
+        uid = "copy-consent-btns"
+        reset_session(uid)
+        handle_message(uid, "English")
+        handle_message(uid, "1")
+        handle_message(uid, "Karnataka")
+        outbound = get_session(uid).get("outbound") or {}
+        titles = [row["title"] for row in outbound.get("options") or []]
+        self.assertEqual(titles, ["Accept", "Decline"])
+
+    def test_slot_choose_labels_fit_whatsapp_limit(self):
+        from setu.interactive import LIST_BUTTON_MAX
+
+        slots = (
+            "age_group",
+            "occupation",
+            "household_income",
+            "social_category",
+            "state",
+        )
+        for slot_id in slots:
+            for lang in ("English", "Hindi", "Marathi", "Kannada"):
+                label = i18n.interactive_list_button(lang, phase="collect_profile", slot_id=slot_id)
+                self.assertLessEqual(len(label), LIST_BUTTON_MAX, msg=f"{slot_id}/{lang}: {label}")
+                self.assertNotEqual(label, i18n.t("interactive_choose", lang), msg=f"{slot_id}/{lang}")
+        self.assertEqual(
+            i18n.interactive_list_button("English", phase="collect_profile", slot_id="age_group"),
+            "choose age",
+        )
+        self.assertEqual(
+            i18n.interactive_list_button("Hindi", phase="collect_profile", slot_id="occupation"),
+            "पेशा चुनें",
+        )
+        self.assertEqual(
+            i18n.interactive_list_button("Hindi", phase="collect_profile", slot_id="household_income"),
+            "आय चुनें",
+        )
+        self.assertEqual(
+            i18n.interactive_list_button("Hindi", phase="collect_profile", slot_id="social_category"),
+            "श्रेणी चुनें",
+        )
 
 
 if __name__ == "__main__":

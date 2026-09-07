@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from setu.interactive import spec_mode
 from setu.orchestrator import handle_message
+from setu import i18n
 from setu.session import get_session, reset_session
 from tests.helpers import accept_consent
 
@@ -57,6 +58,18 @@ class CollectInteractiveTests(unittest.TestCase):
         self.assertIn("Retired", occ_ids)
         self.assertEqual(spec_mode(outbound.get("options") or []), "list")
         self.assertIn("occupation", reply.lower() + " ".join(occ_ids).lower())
+        self.assertEqual(get_session(uid).get("outbound", {}).get("list_button"), "choose profession")
+        self.assertEqual(
+            get_session(uid).get("outbound", {}).get("list_button"),
+            i18n.t("interactive_choose_occupation", "English"),
+        )
+
+    def test_age_group_list_button_names_the_slot(self):
+        uid = "eng-age-choose-label"
+        _start_individual(uid)
+        outbound = get_session(uid).get("outbound") or {}
+        self.assertEqual(outbound.get("list_button"), "choose age")
+        self.assertNotEqual(outbound.get("list_button"), "Choose")
 
 
 class FourQuestionCapTests(unittest.TestCase):
