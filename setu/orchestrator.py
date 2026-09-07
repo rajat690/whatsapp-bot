@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from . import category_intent, category_path, eligibility, i18n, llm, nlu
+from . import category_intent, category_path, eligibility, i18n, llm, lookup, nlu
 from .session import get_session, reset_session
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -47,6 +47,7 @@ SYSTEM_PERSONA = """You are SETU, a warm WhatsApp assistant that helps people in
 Style: short, natural chat messages (1-4 sentences). Sound like a helpful person, not a form or call-centre script.
 No markdown tables. Light WhatsApp formatting (*bold*) sparingly.
 Never invent scheme eligibility — the app will run a deterministic matcher.
+If the user names a scheme, the app looks it up in the library. Never invent schemes or skip to End Chat after a named-scheme ask.
 Languages: English, Hindi, Marathi, and Kannada are all fully supported. Never say you can only speak, help, or reply in one of them.
 Always reply in the session language. Never revert to an earlier language.
 If the user asks to shift/switch/change to English, Hindi, Marathi, or Kannada, continue in that language. Do not refuse.
@@ -157,6 +158,263 @@ def _after_detail_prompt(journey_id: str | None, language: str | None = None) ->
     return i18n.t("after_detail_j1", lang)
 
 
+_NAMED_DISCOVERY_PHASES = frozenset(
+    {
+        "welcome_language",
+        "main_menu",
+        "help_crm",
+        "end_menu",
+        "named_scheme",
+        "named_scheme_list",
+        "named_scheme_ask",
+    }
+)
+
+
+def _category_available() -> bool:
+    try:
+        from . import category_path  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def _start_category_path(session: dict[str, Any]) -> str | None:
+    try:
+        from . import category_path
+    except ImportError:
+        return None
+    start = getattr(category_path, "start", None)
+    if not callable(start):
+        return None
+    return start(session)
+
+
+def _infer_language(session: dict[str, Any], text: str) -> str:
+    if session.get("language"):
+        return i18n.normalize_language(session.get("language"))
+    lang = nlu.detect_language(text)
+    if not lang:
+        if any(0x0900 <= ord(ch) <= 0x097F for ch in text):
+            lang = "Hindi"
+        elif any(0x0C80 <= ord(ch) <= 0x0CFF for ch in text):
+            lang = "Kannada"
+        else:
+            lang = "English"
+    session["language"] = lang
+    return lang
+
+
+def _named_next_options(language: str | None) -> list[tuple[str, str]]:
+    lang = _lang(language=language)
+    options = [
+        ("another", i18n.t("named_next_another", lang)),
+        ("Individual Schemes", i18n.t("named_next_individual", lang)),
+        ("Family Schemes", i18n.t("named_next_family", lang)),
+    ]
+    if _category_available():
+        options.append(("Browse by category", i18n.t("named_next_category", lang)))
+    options.append(("Main Menu", i18n.t("named_next_menu", lang)))
+    return options
+
+
+def _named_next_prompt(session: dict[str, Any]) -> str:
+    lang = _lang(session)
+    options = _named_next_options(lang)
+    session["named_next_options"] = [key for key, _label in options]
+    lines = [i18n.t("named_next_intro", lang)]
+    for i, (_key, label) in enumerate(options, 1):
+        lines.append(f"{i}. {label}")
+    return "\n".join(lines)
+
+
+def _present_named_schemes(session: dict[str, Any], hits: list[dict[str, Any]]) -> str:
+    lang = _lang(session)
+    session["journey_id"] = None
+    session["matched_schemes"] = hits
+    next_prompt = _named_next_prompt(session)
+    if len(hits) == 1:
+        session["phase"] = "named_scheme"
+        session["selected_scheme_sn"] = hits[0].get("SN")
+        return lookup.format_named_scheme_detail(hits[0], next_prompt)
+    session["phase"] = "named_scheme_list"
+    session["selected_scheme_sn"] = None
+    return lookup.format_named_scheme_list(
+        hits,
+        i18n.t("named_list_intro", lang),
+        i18n.t("named_list_footer", lang),
+    )
+
+
+def _named_scheme_miss(session: dict[str, Any], text: str) -> str:
+    lang = _lang(session)
+    query = lookup.extract_scheme_query(text) or text.strip()
+    session["phase"] = "named_scheme_ask"
+    session["matched_schemes"] = []
+    session["selected_scheme_sn"] = None
+    session["journey_id"] = None
+    return i18n.t("named_miss", lang, query=query) + "\n\n" + _named_next_prompt(session)
+
+
+def _apply_named_next(session: dict[str, Any], action: str) -> str | None:
+    if action == "another":
+        session["phase"] = "named_scheme_ask"
+        return i18n.t("named_ask_another", session.get("language"))
+    if action == "Individual Schemes":
+        journey = _start_journey(session, "journey_1")
+        return (
+            i18n.t("individual_intro", session.get("language"))
+            + "\n\n"
+            + _ask_slot(journey["slots"][0], session.get("language"))
+        )
+    if action == "Family Schemes":
+        journey = _start_journey(session, "journey_2")
+        return (
+            i18n.t("family_intro", session.get("language"))
+            + "\n\n"
+            + _ask_slot(journey["slots"][0], session.get("language"))
+        )
+    if action == "Browse by category":
+        started = _start_category_path(session)
+        if started:
+            return started
+        session["phase"] = "main_menu"
+        return _main_menu(session.get("language"))
+    if action == "Main Menu":
+        session["phase"] = "main_menu"
+        session["journey_id"] = None
+        session["slots"] = {}
+        session["matched_schemes"] = []
+        session["selected_scheme_sn"] = None
+        session["path"] = None
+        return _main_menu(session.get("language"))
+    return None
+
+
+def _detect_named_next(session: dict[str, Any], text: str) -> str | None:
+    n = text.lower().strip()
+    options = session.get("named_next_options") or [k for k, _ in _named_next_options(session.get("language"))]
+    if re.fullmatch(r"\d{1,2}", n):
+        idx = int(n) - 1
+        if 0 <= idx < len(options):
+            return options[idx]
+    if nlu.detect_end_choice(text) == "Main Menu" or n in ("main menu", "menu"):
+        return "Main Menu"
+    if any(
+        p in n
+        for p in (
+            "another scheme",
+            "other scheme",
+            "another yojana",
+            "दूसरी योजना",
+            "दुसरी योजना",
+        )
+    ):
+        return "another"
+    if nlu.is_plain_menu_choice(text):
+        choice = nlu.detect_menu(text)
+        if choice in ("Individual Schemes", "Family Schemes", "Browse by category"):
+            return choice
+        if choice == "I need help":
+            return None
+    if nlu.detect_menu(text) == "Browse by category":
+        return "Browse by category"
+    return None
+
+
+def _handle_named_scheme_intent(session: dict[str, Any], text: str) -> str | None:
+    """Library lookup for named schemes — never invent facts or jump to End Chat."""
+    phase = session.get("phase") or ""
+    if session.get("path") == "category" or session.get("journey_id") == "schemes_by_category_v1":
+        return None
+
+    if phase == "named_scheme":
+        action = _detect_named_next(session, text)
+        if action:
+            applied = _apply_named_next(session, action)
+            if applied:
+                return applied
+        hits = lookup.search_schemes(text)
+        if hits:
+            _infer_language(session, text)
+            return _present_named_schemes(session, hits)
+        if nlu.looks_like_scheme_ask(text):
+            return _named_scheme_miss(session, text)
+        return i18n.t("named_unclear", session.get("language")) + "\n\n" + _named_next_prompt(session)
+
+    if phase == "named_scheme_list":
+        schemes = session.get("matched_schemes") or []
+        chosen = nlu.match_scheme_choice(text, schemes)
+        if chosen:
+            session["phase"] = "named_scheme"
+            session["selected_scheme_sn"] = chosen.get("SN")
+            return lookup.format_named_scheme_detail(chosen, _named_next_prompt(session))
+        action = _detect_named_next(session, text)
+        # Numbers belong to the scheme list while it is on screen.
+        if action and not re.fullmatch(r"\d{1,2}", text.lower().strip()):
+            applied = _apply_named_next(session, action)
+            if applied:
+                return applied
+        hits = lookup.search_schemes(text)
+        if hits:
+            return _present_named_schemes(session, hits)
+        if nlu.looks_like_scheme_ask(text):
+            return _named_scheme_miss(session, text)
+        return (
+            i18n.t("named_unclear", session.get("language"))
+            + "\n\n"
+            + lookup.format_named_scheme_list(
+                schemes,
+                i18n.t("named_list_intro", session.get("language")),
+                i18n.t("named_list_footer", session.get("language")),
+            )
+        )
+
+    if phase == "named_scheme_ask":
+        action = _detect_named_next(session, text)
+        if action and action != "another":
+            applied = _apply_named_next(session, action)
+            if applied:
+                return applied
+        hits = lookup.search_schemes(text)
+        if hits:
+            return _present_named_schemes(session, hits)
+        if nlu.is_plain_menu_choice(text):
+            return None
+        return _named_scheme_miss(session, text)
+
+    ask = nlu.looks_like_scheme_ask(text)
+    discovery = phase in _NAMED_DISCOVERY_PHASES
+    if not discovery and not ask:
+        return None
+    if nlu.is_plain_menu_choice(text) and not ask:
+        return None
+    # Bare language picks must stay on the welcome/menu path.
+    if nlu.detect_language(text) and nlu._norm(text) in nlu.LANGUAGE_MAP and not ask:
+        return None
+    # Category keywords (scholarship, pension, BOCW) are packs, not library cards.
+    # A real named scheme still wins via prefer_named_scheme (Ujjwala, Stree Shakti).
+    if category_intent.is_idle_phase(phase) and not category_intent.prefer_named_scheme(text):
+        if category_intent.detect_category_intent(text):
+            return None
+        if category_intent.looks_like_unknown_category(text) and not re.search(
+            r"tell me about|what is|what's|whats|के बारे में", text or "", re.I
+        ):
+            return None
+
+    hits = lookup.search_schemes(text)
+    if hits:
+        best = int(hits[0].get("_lookup_score") or 0)
+        # Discovery turns only auto-route a confident library identity.
+        if ask or best >= 80 or not discovery:
+            _infer_language(session, text)
+            return _present_named_schemes(session, hits)
+    if ask:
+        _infer_language(session, text)
+        return _named_scheme_miss(session, text)
+    return None
+
+
 def _start_journey(session: dict[str, Any], journey_id: str) -> dict[str, Any]:
     session["path"] = None
     session["journey_id"] = journey_id
@@ -164,6 +422,7 @@ def _start_journey(session: dict[str, Any], journey_id: str) -> dict[str, Any]:
     session["slots"] = {}
     session["matched_schemes"] = []
     session["selected_scheme_sn"] = None
+    session["named_next_options"] = []
     return load_journey(journey_id)
 
 
@@ -380,9 +639,12 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
         system = (
             SYSTEM_PERSONA
             + "\nUser is choosing a language. Return JSON: "
-            '{"language": "English"|"Hindi"|"Marathi"|"Kannada"|null, "reply": "..."}. '
+            '{"language": "English"|"Hindi"|"Marathi"|"Kannada"|null, '
+            '"choice": "named_scheme"|null, "scheme_query": string|null, "reply": "..."}. '
             "If unclear, ask again. If set, greet briefly IN THAT LANGUAGE and ask "
-            "1 Individual / 2 Family / 3 Browse category, or Help. Ask only that one menu question."
+            "1 Individual / 2 Family / 3 Browse category, or Help. Ask only that one menu question. "
+            "If the user named a government scheme, set choice=named_scheme and scheme_query "
+            "to the name. Do not invent scheme facts."
         )
         data = llm.chat_json(system, text, temperature=0.4)
         if not data:
@@ -391,6 +653,13 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
         if lang in ("English", "Hindi", "Marathi", "Kannada"):
             session["language"] = lang
             session["phase"] = "main_menu"
+        scheme_query = (data.get("scheme_query") or "").strip()
+        if data.get("choice") == "named_scheme" or scheme_query:
+            found = _handle_named_scheme_intent(session, scheme_query or text)
+            if found:
+                return found
+            _infer_language(session, text)
+            return _named_scheme_miss(session, scheme_query or text)
         reply = _safe_user_reply(data.get("reply"))
         return reply or None
 
@@ -399,7 +668,11 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
             SYSTEM_PERSONA
             + i18n.language_instruction(session.get("language"))
             + "\nUser is at main menu. Return JSON: "
-            '{"choice": "Individual Schemes"|"Family Schemes"|"Browse by category"|"I need help"|null, "reply": "..."}. '
+            '{"choice": "Individual Schemes"|"Family Schemes"|"Browse by category"|"I need help"|"named_scheme"|null, '
+            '"scheme_query": string|null, "reply": "..."}. '
+            "If the user names a scheme or asks 'tell me about X yojana/scheme', choice MUST be named_scheme. "
+            "Do not start Individual/Family/category collection and do not choose help/End Chat for a named scheme. "
+            "Never invent scheme facts — the app will look the name up. "
             "If the user is asking to shift/switch/change language to English, Hindi, Marathi, or Kannada, "
             "that is allowed — do not refuse and do not say you only support one language. "
             "If Individual Schemes, start collecting an individual profile conversationally (ask state first). "
@@ -415,6 +688,13 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
         if not data:
             return None
         choice = data.get("choice")
+        scheme_query = (data.get("scheme_query") or "").strip()
+        if choice == "named_scheme" or scheme_query:
+            found = _handle_named_scheme_intent(session, scheme_query or text)
+            if found:
+                return found
+            _infer_language(session, text)
+            return _named_scheme_miss(session, scheme_query or text)
         reply = _safe_user_reply(data.get("reply")) or ""
         if choice == "I need help":
             session["phase"] = "help_crm"
@@ -440,11 +720,16 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
         return reply or None
 
     if phase == "help_crm":
+        # Named-scheme asks must never be logged as CRM / End Chat.
+        named = _handle_named_scheme_intent(session, text)
+        if named:
+            return named
         system = (
             SYSTEM_PERSONA
             + i18n.language_instruction(session.get("language"))
             + "\nUser is describing a support issue. Acknowledge warmly in JSON: "
-            '{"reply": "...", "summary": "short issue summary"}.'
+            '{"reply": "...", "summary": "short issue summary"}. '
+            "If they named a government scheme, do not close the chat; set summary to the scheme name only."
         )
         data = llm.chat_json(system, text, temperature=0.4)
         summary = text
@@ -521,6 +806,10 @@ def handle_message(user_id: str, text: str) -> str:
     if session.get("path") == "category" or session.get("journey_id") == "schemes_by_category_v1":
         return category_path.handle(session, text, user_id, switched_to=switched_to)
 
+    named_reply = _handle_named_scheme_intent(session, text)
+    if named_reply:
+        return named_reply
+
     journey = load_journey(session.get("journey_id"))
 
     # ---- welcome / language ----
@@ -575,6 +864,26 @@ def handle_message(user_id: str, text: str) -> str:
 
     # ---- help / CRM ----
     if phase == "help_crm":
+        if nlu.is_plain_menu_choice(text):
+            choice = nlu.detect_menu(text)
+            if choice == "Individual Schemes":
+                journey = _start_journey(session, "journey_1")
+                return (
+                    i18n.t("individual_intro", session.get("language"))
+                    + "\n\n"
+                    + _ask_slot(journey["slots"][0], session.get("language"))
+                )
+            if choice == "Family Schemes":
+                journey = _start_journey(session, "journey_2")
+                return (
+                    i18n.t("family_intro", session.get("language"))
+                    + "\n\n"
+                    + _ask_slot(journey["slots"][0], session.get("language"))
+                )
+            if choice == "Browse by category":
+                started = _start_category_path(session)
+                if started:
+                    return started
         convo = _conversational_openers(phase, session, text)
         if convo:
             return convo

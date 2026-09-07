@@ -397,6 +397,84 @@ _STRINGS: dict[str, dict[str, str]] = {
         "Marathi": "I don't have a topic pack for that yet. You can *3 Browse category*, choose Individual / Family, or type *I need help*.",
         "Kannada": "I don't have a topic pack for that yet. You can *3 Browse category*, choose Individual / Family, or type *I need help*.",
     },
+    "named_list_intro": {
+        "English": "I found these matching schemes in the SETU library:",
+        "Hindi": "SETU सूची में ये योजनाएँ मिलीं:",
+        "Marathi": "SETU यादीत या योजना सापडल्या:",
+        "Kannada": "SETU ಗ್ರಂಥಾಲಯದಲ್ಲಿ ಈ ಯೋಜನೆಗಳು ಸಿಕ್ಕಿವೆ:",
+    },
+    "named_list_footer": {
+        "English": "Reply with a number, or type another scheme name.",
+        "Hindi": "नंबर लिखें, या दूसरी योजना का नाम लिखें।",
+        "Marathi": "क्रमांक लिहा, किंवा दुसऱ्या योजनेचे नाव लिहा.",
+        "Kannada": "ಸಂಖ್ಯೆ ಬರೆಯಿರಿ, ಅಥವಾ ಇನ್ನೊಂದು ಯೋಜನೆಯ ಹೆಸರು ಬರೆಯಿರಿ.",
+    },
+    "named_miss": {
+        "English": (
+            'I could not find a matching scheme named "{query}" in the SETU library '
+            "(Central, Karnataka, and Maharashtra). I will not guess or invent details."
+        ),
+        "Hindi": (
+            'SETU सूची (केंद्र, कर्नाटक, महाराष्ट्र) में "{query}" नाम की योजना नहीं मिली। '
+            "मैं अनुमान से जानकारी नहीं बनाऊँगा।"
+        ),
+        "Marathi": (
+            'SETU यादीत (केंद्र, कर्नाटक, महाराष्ट्र) "{query}" नावाची योजना सापडली नाही. '
+            "मी तपशिल गृहीत धरणार नाही."
+        ),
+        "Kannada": (
+            'SETU ಗ್ರಂಥಾಲಯದಲ್ಲಿ (ಕೇಂದ್ರ, ಕರ್ನಾಟಕ, ಮಹಾರಾಷ್ಟ್ರ) "{query}" ಹೆಸರಿನ ಯೋಜನೆ ಸಿಗಲಿಲ್ಲ. '
+            "ನಾನು ಊಹಿಸಿ ವಿವರಗಳನ್ನು ಹೇಳುವುದಿಲ್ಲ."
+        ),
+    },
+    "named_next_intro": {
+        "English": "What next?",
+        "Hindi": "आगे क्या करना चाहेंगे?",
+        "Marathi": "पुढे काय करायचे?",
+        "Kannada": "ಮುಂದೆ ಏನು?",
+    },
+    "named_next_another": {
+        "English": "Ask about another scheme",
+        "Hindi": "दूसरी योजना पूछें",
+        "Marathi": "दुसरी योजना विचारा",
+        "Kannada": "ಇನ್ನೊಂದು ಯೋಜನೆ ಕೇಳಿ",
+    },
+    "named_next_individual": {
+        "English": "Individual schemes",
+        "Hindi": "व्यक्तिगत योजनाएँ",
+        "Marathi": "वैयक्तिक योजना",
+        "Kannada": "ವೈಯಕ್ತಿಕ ಯೋಜನೆಗಳು",
+    },
+    "named_next_family": {
+        "English": "Family schemes",
+        "Hindi": "परिवार योजनाएँ",
+        "Marathi": "कुटुंब योजना",
+        "Kannada": "ಕುಟುಂಬ ಯೋಜನೆಗಳು",
+    },
+    "named_next_category": {
+        "English": "Browse by category",
+        "Hindi": "श्रेणी से खोजें",
+        "Marathi": "श्रेणीनुसार शोधा",
+        "Kannada": "ವರ್ಗದಿಂದ ಹುಡುಕಿ",
+    },
+    "named_next_menu": {
+        "English": "Main menu",
+        "Hindi": "मुख्य मेनू",
+        "Marathi": "मुख्य मेनू",
+        "Kannada": "ಮುಖ್ಯ ಮೆನು",
+    },
+    "named_ask_another": {
+        "English": "Which scheme would you like to know about? You can also choose Individual, Family, or Main menu.",
+        "Hindi": "किस योजना के बारे में जानना चाहते हैं? Individual, Family, या Main menu भी चुन सकते हैं।",
+        "Marathi": "कोणत्या योजनेबद्दल जाणून घ्यायचे आहे? Individual, Family, किंवा Main menu देखील निवडता येईल.",
+        "Kannada": "ಯಾವ ಯೋಜನೆಯ ಬಗ್ಗೆ ತಿಳಿಯಬೇಕು? Individual, Family, ಅಥವಾ Main menu ಆಯ್ಕೆ ಮಾಡಬಹುದು.",
+    },
+    "named_unclear": {
+        "English": "Please type a scheme name, or choose a numbered option.",
+        "Hindi": "कृपया योजना का नाम लिखें, या सूची से एक विकल्प चुनें।",
+        "Marathi": "कृपया योजनेचे नाव लिहा, किंवा क्रमांक निवडा.",
+        "Kannada": "ದಯವಿಟ್ಟು ಯೋಜನೆಯ ಹೆಸರು ಬರೆಯಿರಿ, ಅಥವಾ ಸಂಖ್ಯೆಯ ಆಯ್ಕೆ ಆರಿಸಿ.",
+    },
 }
 
 
