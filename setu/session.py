@@ -18,6 +18,12 @@ def default_session() -> dict[str, Any]:
         "selected_scheme_sn": None,
         "pending_help": False,
         "last_prompt": None,
+        "path": None,
+        "category_id": None,
+        "state_scope": None,
+        "hub_screen": 1,
+        "pension_slice": False,
+        "cat_q_index": 0,
     }
 
 

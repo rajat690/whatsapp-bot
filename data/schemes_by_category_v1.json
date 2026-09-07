@@ -1,0 +1,27 @@
+{
+  "id": "schemes_by_category_v1",
+  "name": "Browse by category / Find by topic",
+  "path": "category",
+  "notes": "Isolated parallel path. Individual (journey_1) and Family (journey_2) sessions are unchanged. Pack questions and matching keywords live in setu/category_catalog.py.",
+  "menu_button": 3,
+  "hub_1": [
+    "education",
+    "scholarship",
+    "housing",
+    "pension",
+    "women_child",
+    "livelihood",
+    "health",
+    "agriculture",
+    "disability",
+    "more"
+  ],
+  "hub_2": [
+    "food_ration",
+    "labour_bocw",
+    "family_who",
+    "back"
+  ],
+  "languages": ["English", "Hindi", "Kannada", "Marathi"],
+  "state_scopes": ["central", "karnataka", "maharashtra", "state_central"]
+}

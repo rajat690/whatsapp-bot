@@ -186,6 +186,7 @@ class KeywordJourneyTests(unittest.TestCase):
             handle_message(uid, msg)
         reply = handle_message(uid, "proceed")
         self.assertIn("scheme", reply.lower())
+        self.assertRegex(reply, r"(?m)^1\. ")
         session = get_session(uid)
         self.assertEqual(session["phase"], "scheme_list")
         self.assertTrue(session.get("matched_schemes"))
