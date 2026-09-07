@@ -246,7 +246,11 @@ _NATIVE_LANGUAGE_NAMES = {
     "हिन्दी": "Hindi",
     "मराठी": "Marathi",
     "ಕನ್ನಡ": "Kannada",
+    "कन्नड़": "Kannada",
+    "कन्नड": "Kannada",
+    "कन्नडा": "Kannada",
     "अंग्रेजी": "English",
+    "अंग्रेज़ी": "English",
     "इंग्रजी": "English",
     "ಇಂಗ್ಲಿಷ್": "English",
     "ಇಂಗ್ಲೀಷ್": "English",
@@ -254,17 +258,51 @@ _NATIVE_LANGUAGE_NAMES = {
 
 _FULL_LANGUAGE_KEYS = ("english", "hindi", "marathi", "kannada")
 
-_SWITCH_INTENT = re.compile(
-    r"\b(switch|language|speak|talk|continue|reply|respond|change)\b",
-    re.I,
+# Verbs/nouns that mark an explicit request to change session language.
+# "shift" is required — live users type "shift to kannada".
+_SWITCH_VERBS = (
+    "switch",
+    "shift",
+    "change",
+    "continue",
+    "talk",
+    "speak",
+    "reply",
+    "respond",
+    "use",
+    "set",
+    "convert",
+    "translate",
+    "move",
+    "language",
 )
+_SWITCH_VERB_RE = "|".join(_SWITCH_VERBS)
+
+_SWITCH_INTENT = re.compile(rf"\b({_SWITCH_VERB_RE})\b", re.I)
 _SWITCH_TO_LANG = re.compile(
-    r"\b(?:switch|change|continue|talk|speak|reply|respond|use)"
+    rf"\b(?:{_SWITCH_VERB_RE})"
     r"(?:\s+\w+){0,3}\s+(?:to|in|into)\s+"
     r"(english|hindi|marathi|kannada)\b",
     re.I,
 )
 _IN_TO_LANG = re.compile(r"\b(?:in|to|into)\s+(english|hindi|marathi|kannada)\b", re.I)
+_NATIVE_SWITCH_MARKERS = (
+    "भाषा",
+    "में बात",
+    "मध्ये",
+    "ಮಾತನಾಡ",
+    "शिफ्ट",
+    "ಭಾಷೆ",
+)
+_SWITCH_FILLER = re.compile(
+    r"\b("
+    + _SWITCH_VERB_RE
+    + r"|to|in|into|back|the|a|an|me|us|please|pls|kindly|can|you|could|"
+    r"would|i|want|like|lets|let's|now|onwards|from|and|or|my|our|"
+    r"we|should|shall|may|english|hindi|marathi|kannada|eng|hin|mar|kan|"
+    r"en|hi|mr|kn|lang)\b",
+    re.I,
+)
 
 
 def detect_language(text: str) -> str | None:
@@ -291,6 +329,11 @@ def detect_language_switch(text: str) -> str | None:
         return None
     if n in LANGUAGE_MAP:
         return LANGUAGE_MAP[n]
+    # "kannada please" / "please hindi"
+    polite = re.sub(r"\b(please|pls|kindly|now|thanks|thank you)\b", " ", n)
+    polite = re.sub(r"\s+", " ", polite).strip()
+    if polite in LANGUAGE_MAP:
+        return LANGUAGE_MAP[polite]
     for native, val in _NATIVE_LANGUAGE_NAMES.items():
         if text.strip() == native:
             return val
@@ -303,7 +346,7 @@ def detect_language_switch(text: str) -> str | None:
         return LANGUAGE_MAP[m.group(1).lower()]
 
     has_intent = bool(_SWITCH_INTENT.search(n)) or any(
-        p in text for p in ("भाषा", "में बात", "मध्ये", "ಮಾತನಾಡ")
+        p in text for p in _NATIVE_SWITCH_MARKERS
     )
     if has_intent:
         for native, val in _NATIVE_LANGUAGE_NAMES.items():
@@ -313,6 +356,27 @@ def detect_language_switch(text: str) -> str | None:
             if _contains_phrase(n, key):
                 return LANGUAGE_MAP[key]
     return None
+
+
+def is_language_switch_only(text: str) -> bool:
+    """True when the message is just a request to change session language.
+
+    Mixed turns ("switch to english. i stay in karnataka") return False so slot
+    extraction still runs.
+    """
+    if not detect_language_switch(text):
+        return False
+    stripped = text
+    for native in _NATIVE_LANGUAGE_NAMES:
+        stripped = stripped.replace(native, " ")
+    for marker in _NATIVE_SWITCH_MARKERS:
+        stripped = stripped.replace(marker, " ")
+    leftover = _SWITCH_FILLER.sub(" ", _norm(stripped))
+    for extra in ("टू", "को", "में", "से", "करो", "करें", "चाहिए", "ಗೆ", "ನಲ್ಲಿ", "ಮಾಡಿ"):
+        leftover = leftover.replace(extra, " ")
+    leftover = re.sub(r"[^\w]+", " ", leftover)
+    leftover = re.sub(r"\s+", " ", leftover).strip()
+    return leftover == ""
 
 
 def detect_menu(text: str) -> str | None:

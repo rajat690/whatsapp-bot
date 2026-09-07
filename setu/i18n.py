@@ -419,7 +419,39 @@ def language_instruction(language: str | None) -> str:
         f"\nSession language is {lang}. Write EVERY user-facing sentence in {lang} only. "
         "Do not revert to a previous language. If the user just requested a language change, "
         "acknowledge once and continue entirely in the new session language.\n"
+        "SETU fully supports English, Hindi, Marathi, and Kannada. "
+        "Never say you can only speak, help, or reply in one language. "
+        "Never refuse a request to use one of these four languages. "
+        "If a phrase is missing in the session language, use plain English for that phrase — "
+        "do not claim the language is unsupported.\n"
     )
+
+
+_LANGUAGE_LOCK_RE = re.compile(
+    r"("
+    r"(?:can|could|will)\s+only\s+(?:help|speak|talk|reply|assist|support|chat|respond)"
+    r"|"
+    r"only\s+(?:help|speak|talk|reply|assist|support|available|continue|chat|respond)"
+    r".{0,48}\b(?:hindi|english|marathi|kannada|हिन्दी|हिंदी|मराठी|ಕನ್ನಡ)\b"
+    r"|"
+    r"(?:हिन्दी|हिंदी|मराठी|ಕನ್ನಡ).{0,16}में ही"
+    r"|"
+    r"में ही\s+(?:सहायता|बात|जवाब|मदद)"
+    r"|"
+    r"(?:केवल|सिर्फ|सिर्फ़)\s+(?:हिन्दी|हिंदी|मराठी|ಕನ್ನಡ|hindi|english|marathi|kannada)"
+    r"|"
+    r"(?:ಮಾತ್ರ)\s+(?:ಸಹಾಯ|ಮಾತನಾಡ)"
+    r")",
+    re.I | re.DOTALL,
+)
+
+
+def claims_single_language_lock(reply: str | None) -> bool:
+    """True when a reply invents a single-language-only limitation."""
+    text = (reply or "").strip()
+    if not text:
+        return False
+    return _LANGUAGE_LOCK_RE.search(text) is not None
 
 
 def _script_counts(reply: str) -> tuple[int, int, int]:
@@ -513,6 +545,8 @@ def usable_collect_reply(reply: str, language: str | None, missing_slots: list) 
     if not text:
         return False
     if not reply_matches_language(text, language):
+        return False
+    if claims_single_language_lock(text):
         return False
     if is_multi_slot_prompt(text, missing_slots):
         return False
