@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from . import category_path, eligibility, i18n, llm, nlu
+from . import category_intent, category_path, eligibility, i18n, llm, nlu
 from .session import get_session, reset_session
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -139,6 +139,32 @@ def _one_slot_reply(
         parts.append(i18n.t("language_switch_ack", lang))
     parts.append(_ask_slot(missing_after[0], lang))
     return "\n\n".join(parts)
+
+
+def _maybe_category_intent(session: dict[str, Any], text: str) -> str | None:
+    """From welcome / menu / idle: category keyword → that pack (skip hub).
+
+    Named scheme lookup wins when both could match (PR #6, if present).
+    Bare Individual / Family / Help / 1-2-3 stay on the menu path.
+    """
+    if not category_intent.is_idle_phase(session.get("phase")):
+        return None
+    if category_intent.prefer_named_scheme(text):
+        return None
+    cid = category_intent.detect_category_intent(text)
+    if cid:
+        lang = session.get("language") or category_intent.infer_category_language(text)
+        return category_path.start_for_category(session, cid, language=lang)
+    if not category_intent.looks_like_unknown_category(text):
+        return None
+    lang = session.get("language")
+    miss = i18n.t("cat_unknown", lang)
+    if session.get("phase") == "welcome_language":
+        return miss + "\n\n" + _welcome()
+    if session.get("phase") == "end_menu":
+        return miss + "\n\n" + i18n.t("end_menu", lang)
+    session["phase"] = "main_menu"
+    return miss + "\n\n" + _main_menu(lang)
 
 
 def _welcome() -> str:
@@ -437,6 +463,9 @@ def handle_message(user_id: str, text: str) -> str:
 
     # ---- welcome / language ----
     if phase == "welcome_language":
+        cat_reply = _maybe_category_intent(session, text)
+        if cat_reply:
+            return cat_reply
         convo = _conversational_openers(phase, session, text)
         if convo:
             return convo
@@ -453,8 +482,12 @@ def handle_message(user_id: str, text: str) -> str:
     # ---- main menu ----
     if phase == "main_menu":
         # Button 3 / explicit category tap is deterministic intent — do not send to LLM.
-        if nlu.detect_menu(text) == "Browse by category":
+        if nlu.detect_menu(text) == "Browse by category" and not category_intent.detect_category_intent(text):
             return category_path.start(session)
+        # Free-text topic ("scholarship") starts that pack — not Individual/Family collect.
+        cat_reply = _maybe_category_intent(session, text)
+        if cat_reply:
+            return cat_reply
         convo = _conversational_openers(phase, session, text)
         if convo:
             return convo
@@ -664,6 +697,9 @@ def handle_message(user_id: str, text: str) -> str:
 
     # ---- end menu ----
     if phase == "end_menu":
+        cat_reply = _maybe_category_intent(session, text)
+        if cat_reply:
+            return cat_reply
         choice = nlu.detect_end_choice(text)
         if choice == "Main Menu":
             session["phase"] = "main_menu"
