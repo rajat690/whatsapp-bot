@@ -419,6 +419,12 @@ _STRINGS: dict[str, dict[str, str]] = {
         "Marathi": "निवडा",
         "Kannada": "ಆಯ್ಕೆ",
     },
+    "interactive_choose_scheme": {
+        "English": "Choose scheme",
+        "Hindi": "योजना चुनें",
+        "Marathi": "योजना निवडा",
+        "Kannada": "ಯೋಜನೆ ಆಯ್ಕೆ",
+    },
     "interactive_choose_language": {
         "English": "choose language",
         "Hindi": "भाषा चुनें",
@@ -970,6 +976,7 @@ def t(key: str, language: str | None, **kwargs: str) -> str:
 
 
 _LANGUAGE_CHOOSE_PHASES = frozenset({"welcome_language", "cat_language"})
+_SCHEME_CHOOSE_PHASES = frozenset({"scheme_list", "cat_results", "named_scheme_list"})
 
 
 def interactive_list_button(
@@ -978,9 +985,11 @@ def interactive_list_button(
     phase: str | None = None,
     slot_id: str | None = None,
 ) -> str:
-    """WhatsApp list-button title: language picker, collect slot, or generic Choose."""
+    """WhatsApp list-button title: language picker, collect slot, scheme list, or generic Choose."""
     if phase in _LANGUAGE_CHOOSE_PHASES:
         return t("interactive_choose_language", language)
+    if phase in _SCHEME_CHOOSE_PHASES:
+        return t("interactive_choose_scheme", language)
     if slot_id:
         key = f"interactive_choose_{slot_id}"
         if key in _STRINGS:
