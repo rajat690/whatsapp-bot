@@ -24,6 +24,13 @@ def default_session() -> dict[str, Any]:
         "hub_screen": 1,
         "pension_slice": False,
         "cat_q_index": 0,
+        "consent": None,
+        "consent_resume": None,
+        "pending_after_consent": None,
+        "profile_signals": {},
+        "who_options": [],
+        "outbound": None,
+        "pack_preset": None,
     }
 
 

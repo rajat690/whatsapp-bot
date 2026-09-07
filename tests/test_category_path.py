@@ -9,6 +9,7 @@ from setu import category_catalog as cat
 from setu import eligibility, nlu
 from setu.orchestrator import handle_message
 from setu.session import get_session, reset_session
+from tests.helpers import accept_consent
 
 
 def _walk_to_menu(uid: str, language: str = "English") -> None:
@@ -72,6 +73,8 @@ class CategoryWalkTests(unittest.TestCase):
         self.assertIn("Central", reply)
 
         reply = handle_message(uid, "2")  # Karnataka
+        self.assertEqual(get_session(uid)["phase"], "consent")
+        reply = accept_consent(uid)
         self.assertEqual(get_session(uid)["phase"], "cat_hub")
         self.assertEqual(get_session(uid)["state_scope"], "karnataka")
         self.assertEqual(get_session(uid)["slots"].get("state"), "Karnataka")
@@ -112,6 +115,7 @@ class CategoryWalkTests(unittest.TestCase):
         handle_message(uid, "3")
         handle_message(uid, "1")
         handle_message(uid, "1")  # Central only
+        accept_consent(uid)
         reply = handle_message(uid, "10")  # More
         self.assertEqual(get_session(uid)["hub_screen"], 2)
         self.assertIn("Food", reply)
@@ -127,6 +131,7 @@ class CategoryWalkTests(unittest.TestCase):
         handle_message(uid, "1")
         handle_message(uid, "4")  # State + Central
         handle_message(uid, "1")  # Karnataka + Central
+        accept_consent(uid)
         handle_message(uid, "10")
         reply = handle_message(uid, "3")  # family_who
         self.assertEqual(get_session(uid)["phase"], "cat_who")
@@ -146,6 +151,7 @@ class CategoryWalkTests(unittest.TestCase):
         handle_message(uid, "3")
         handle_message(uid, "English")
         handle_message(uid, "Karnataka")
+        accept_consent(uid)
         handle_message(uid, "10")
         handle_message(uid, "Find by who")
         handle_message(uid, "2")  # disability
@@ -168,6 +174,7 @@ class CategoryWalkTests(unittest.TestCase):
         handle_message(uid, "3")
         handle_message(uid, "1")
         handle_message(uid, "2")  # Karnataka
+        accept_consent(uid)
         handle_message(uid, "10")
         reply = handle_message(uid, "2")  # labour
         self.assertIn("1 of 3", reply)
@@ -186,6 +193,7 @@ class CategoryWalkTests(unittest.TestCase):
         self.assertEqual(get_session(uid)["language"], "Hindi")
         self.assertIn("केंद्र", reply)
         reply = handle_message(uid, "2")
+        reply = accept_consent(uid) or reply
         self.assertIn("शिक्षा", reply)
         self.assertIn("10.", reply)
 
@@ -195,6 +203,7 @@ class CategoryWalkTests(unittest.TestCase):
         handle_message(uid, "3")
         handle_message(uid, "1")
         handle_message(uid, "1")
+        accept_consent(uid)
         handle_message(uid, "8")  # agriculture
         for _ in range(4):
             handle_message(uid, "1")
@@ -212,6 +221,7 @@ class CategoryWalkTests(unittest.TestCase):
         handle_message(uid, "3")
         handle_message(uid, "2")  # Hindi
         handle_message(uid, "2")  # Karnataka
+        accept_consent(uid)
         handle_message(uid, "1")  # education
         for _ in range(3):
             handle_message(uid, "1")
@@ -234,6 +244,7 @@ class CategoryWalkTests(unittest.TestCase):
         handle_message(uid, "3")
         handle_message(uid, "2")
         handle_message(uid, "2")
+        accept_consent(uid)
         self.assertEqual(get_session(uid)["phase"], "cat_hub")
         reply = handle_message(uid, "shift to kannada")
         self.assertEqual(get_session(uid)["language"], "Kannada")
@@ -251,7 +262,9 @@ class ExistingJourneyNumberingTests(unittest.TestCase):
         uid = "j1-num"
         _walk_to_menu(uid)
         handle_message(uid, "individual schemes")
-        for msg in ("Karnataka", "28", "salaried", "25000", "OBC", "married", "no"):
+        handle_message(uid, "Karnataka")
+        accept_consent(uid)
+        for msg in ("28", "salaried", "25000", "OBC", "married", "no"):
             handle_message(uid, msg)
         reply = handle_message(uid, "proceed")
         session = get_session(uid)
@@ -270,6 +283,7 @@ class ExistingJourneyNumberingTests(unittest.TestCase):
         handle_message(uid, "3")
         handle_message(uid, "1")
         handle_message(uid, "2")
+        accept_consent(uid)
         session = get_session(uid)
         self.assertEqual(session["path"], "category")
         self.assertNotEqual(session["phase"], "collect_profile")

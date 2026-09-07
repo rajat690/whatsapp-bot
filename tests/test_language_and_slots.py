@@ -8,6 +8,7 @@ from unittest.mock import patch
 from setu import i18n, nlu
 from setu.orchestrator import handle_message
 from setu.session import get_session, reset_session
+from tests.helpers import accept_consent
 
 
 J1_DUMP = (
@@ -167,7 +168,8 @@ class KeywordJourneyTests(unittest.TestCase):
         handle_message(uid, "English")
         reply = handle_message(uid, "individual schemes")
         self.assertIn("state", reply.lower())
-        reply = handle_message(uid, "Karnataka")
+        handle_message(uid, "Karnataka")
+        reply = accept_consent(uid)
         self.assertIn("age", reply.lower())
         self.assertNotIn("marital", reply.lower())
         self.assertNotIn("disability", reply.lower())
@@ -180,6 +182,7 @@ class KeywordJourneyTests(unittest.TestCase):
         handle_message(uid, "English")
         handle_message(uid, "family schemes")
         handle_message(uid, "Karnataka")
+        accept_consent(uid)
         reply = handle_message(uid, "5")
         self.assertIn("children", reply.lower())
         self.assertNotIn("ration", reply.lower())
@@ -194,6 +197,8 @@ class KeywordJourneyTests(unittest.TestCase):
         reply = handle_message(uid, "can you switch back to english. i stay in karnataka")
         self.assertEqual(get_session(uid)["language"], "English")
         self.assertEqual(get_session(uid)["slots"].get("state"), "Karnataka")
+        self.assertEqual(get_session(uid)["phase"], "consent")
+        reply = accept_consent(uid)
         self.assertIn("household", reply.lower())
         self.assertNotRegex(reply, r"[\u0900-\u097F]")
         reply = handle_message(uid, "20")
@@ -245,7 +250,9 @@ class KeywordJourneyTests(unittest.TestCase):
         handle_message(uid, "hi")
         handle_message(uid, "English")
         handle_message(uid, "individual schemes")
-        for msg in ("Karnataka", "28", "salaried", "25000", "OBC", "married", "no"):
+        handle_message(uid, "Karnataka")
+        accept_consent(uid)
+        for msg in ("28", "salaried", "25000", "OBC", "married", "no"):
             handle_message(uid, msg)
         reply = handle_message(uid, "proceed")
         self.assertIn("scheme", reply.lower())
@@ -292,8 +299,10 @@ class LlmRegressionTests(unittest.TestCase):
         ):
             handle_message(uid, "marathi")
             handle_message(uid, "2")
-            reply = handle_message(uid, "can you switch back to english. i stay in karnataka")
+            handle_message(uid, "can you switch back to english. i stay in karnataka")
             self.assertEqual(get_session(uid)["language"], "English")
+            self.assertEqual(get_session(uid)["phase"], "consent")
+            reply = accept_consent(uid)
             self.assertIn("household", reply.lower())
 
             reply = handle_message(uid, "20")
@@ -336,7 +345,9 @@ class LlmRegressionTests(unittest.TestCase):
         ):
             handle_message(uid, "hindi")
             handle_message(uid, "Vyaktigat")
-            reply = handle_message(uid, "Karnataka")
+            handle_message(uid, "Karnataka")
+            self.assertEqual(get_session(uid)["phase"], "consent")
+            reply = accept_consent(uid)
             self.assertEqual(get_session(uid)["language"], "Hindi")
             self.assertIn("आयु", reply)
             self.assertNotIn("वैवाहिक", reply)
@@ -376,7 +387,9 @@ class LlmRegressionTests(unittest.TestCase):
         ):
             handle_message(uid, "English")
             handle_message(uid, "individual schemes")
-            reply = handle_message(uid, "I stay in Karnataka")
+            handle_message(uid, "I stay in Karnataka")
+            self.assertEqual(get_session(uid)["phase"], "consent")
+            reply = accept_consent(uid)
             self.assertEqual(reply, natural)
             self.assertNotIn("Which age group are you in?", reply)
             self.assertNotIn("Examples:", reply)
@@ -420,6 +433,8 @@ class LlmRegressionTests(unittest.TestCase):
             handle_message(uid, "English")
             handle_message(uid, "individual")
             handle_message(uid, "Maharashtra")
+            self.assertEqual(get_session(uid)["phase"], "consent")
+            accept_consent(uid)
             reply = handle_message(uid, "by the way did you watch the match yesterday")
             self.assertEqual(reply, natural)
             self.assertFalse(get_session(uid)["slots"].get("age_group"))
@@ -463,6 +478,8 @@ class LlmRegressionTests(unittest.TestCase):
             handle_message(uid, "English")
             handle_message(uid, "family")
             handle_message(uid, "Karnataka")
+            self.assertEqual(get_session(uid)["phase"], "consent")
+            accept_consent(uid)
             reply = handle_message(uid, "there are five of us")
             self.assertEqual(reply, natural)
             self.assertNotIn("How many children under 18 are in the household?", reply)

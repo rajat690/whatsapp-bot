@@ -2,7 +2,14 @@ import os
 import requests
 from flask import Flask, request, jsonify
 
+from setu.interactive import (
+    INTERACTIVE_BODY_MAX,
+    build_interactive_payload,
+    build_text_payload,
+    parse_inbound_message,
+)
 from setu.orchestrator import handle_message
+from setu.session import get_session
 
 app = Flask(__name__)
 
@@ -57,48 +64,26 @@ def receive_message():
 
                     for message in value.get("messages", []):
                         user_phone = message.get("from")
-                        message_type = message.get("type")
-
                         if not user_phone:
                             continue
 
-                        user_text = None
-
-                        if message_type == "text":
-                            user_text = (
-                                message.get("text", {})
-                                .get("body", "")
-                                .strip()
-                            )
-                        elif message_type == "interactive":
-                            interactive = message.get("interactive", {})
-                            itype = interactive.get("type")
-                            if itype == "button_reply":
-                                user_text = (
-                                    interactive.get("button_reply", {})
-                                    .get("title", "")
-                                    .strip()
-                                )
-                            elif itype == "list_reply":
-                                user_text = (
-                                    interactive.get("list_reply", {})
-                                    .get("title", "")
-                                    .strip()
-                                )
-
+                        user_text = parse_inbound_message(message)
                         if user_text:
                             print(
                                 f"Incoming from {user_phone}: {user_text}",
                                 flush=True,
                             )
                             bot_reply = handle_message(user_phone, user_text)
-                            send_whatsapp_message(user_phone, bot_reply)
-                        elif message_type:
-                            print(
-                                f"Ignoring unsupported message type: "
-                                f"{message_type}",
-                                flush=True,
-                            )
+                            outbound = get_session(user_phone).get("outbound") or {}
+                            send_whatsapp_reply(user_phone, bot_reply, outbound)
+                        else:
+                            message_type = message.get("type")
+                            if message_type:
+                                print(
+                                    f"Ignoring unsupported message type: "
+                                    f"{message_type}",
+                                    flush=True,
+                                )
 
     except Exception as exc:
         # Keep the webhook acknowledged during debugging so Meta does not
@@ -111,76 +96,103 @@ def receive_message():
     return jsonify({"status": "success"}), 200
 
 
-def send_whatsapp_message(recipient_phone, message_text):
-    """Sends a text reply through the WhatsApp Cloud API."""
-
-    if not ACCESS_TOKEN:
-        print("WHATSAPP_ACCESS_TOKEN is missing.", flush=True)
-        return False
-
-    if not PHONE_NUMBER_ID:
-        print("WHATSAPP_PHONE_NUMBER_ID is missing.", flush=True)
-        return False
-
-    url = (
+def _meta_url() -> str:
+    return (
         f"https://graph.facebook.com/"
         f"{GRAPH_API_VERSION}/{PHONE_NUMBER_ID}/messages"
     )
 
-    headers = {
+
+def _meta_headers() -> dict[str, str]:
+    return {
         "Authorization": f"Bearer {ACCESS_TOKEN}",
         "Content-Type": "application/json",
     }
 
-    # WhatsApp text body max ~4096 chars
-    if message_text and len(message_text) > 4000:
-        message_text = message_text[:3990] + "…"
 
-    payload = {
-        "messaging_product": "whatsapp",
-        "recipient_type": "individual",
-        "to": recipient_phone,
-        "type": "text",
-        "text": {
-            "preview_url": False,
-            "body": message_text,
-        },
-    }
-
+def _post_meta(payload: dict) -> bool:
     try:
         response = requests.post(
-            url,
+            _meta_url(),
             json=payload,
-            headers=headers,
+            headers=_meta_headers(),
             timeout=20,
         )
-
         print(
-            f"Meta send response: "
-            f"{response.status_code} {response.text}",
+            f"Meta send response: {response.status_code} {response.text}",
             flush=True,
         )
-
         if response.ok:
+            return True
+        print(
+            f"Failed to send payload. Status: {response.status_code}",
+            flush=True,
+        )
+        return False
+    except requests.RequestException as exc:
+        print(f"Error sending WhatsApp message: {exc}", flush=True)
+        return False
+
+
+def send_text_message(recipient_phone: str, message_text: str) -> bool:
+    """Plain-text fallback (also used when interactive send is not possible)."""
+    if not ACCESS_TOKEN:
+        print("WHATSAPP_ACCESS_TOKEN is missing.", flush=True)
+        return False
+    if not PHONE_NUMBER_ID:
+        print("WHATSAPP_PHONE_NUMBER_ID is missing.", flush=True)
+        return False
+    payload = build_text_payload(recipient_phone, message_text)
+    ok = _post_meta(payload)
+    if ok:
+        print(f"Reply sent successfully to {recipient_phone}", flush=True)
+    return ok
+
+
+def send_whatsapp_reply(recipient_phone: str, message_text: str, outbound: dict | None = None) -> bool:
+    """Send reply buttons (≤3), a list (4–10), or numbered plain text."""
+    if not ACCESS_TOKEN:
+        print("WHATSAPP_ACCESS_TOKEN is missing.", flush=True)
+        return False
+    if not PHONE_NUMBER_ID:
+        print("WHATSAPP_PHONE_NUMBER_ID is missing.", flush=True)
+        return False
+
+    outbound = outbound or {}
+    options = outbound.get("options") or []
+    body = outbound.get("body") or message_text
+    list_button = outbound.get("list_button") or "Choose"
+
+    if options:
+        interactive_body = body
+        if len(interactive_body) > INTERACTIVE_BODY_MAX:
+            # Long scheme cards: send the full numbered text, then a short menu.
+            send_text_message(recipient_phone, message_text)
+            interactive_body = outbound.get("short_body") or "Choose an option:"
+        payload = build_interactive_payload(
+            recipient_phone,
+            interactive_body,
+            options,
+            list_button=list_button,
+        )
+        if payload and _post_meta(payload):
             print(
-                f"Reply sent successfully to {recipient_phone}",
+                f"Interactive reply sent to {recipient_phone} "
+                f"({len(options)} options)",
                 flush=True,
             )
             return True
-
         print(
-            f"Failed to send reply to {recipient_phone}. "
-            f"Status: {response.status_code}",
+            "Interactive send failed or not applicable; falling back to text.",
             flush=True,
         )
-        return False
 
-    except requests.RequestException as exc:
-        print(
-            f"Error sending WhatsApp message: {exc}",
-            flush=True,
-        )
-        return False
+    return send_text_message(recipient_phone, message_text)
+
+
+def send_whatsapp_message(recipient_phone, message_text):
+    """Back-compat text send used by older call sites."""
+    return send_text_message(recipient_phone, message_text)
 
 
 if __name__ == "__main__":
