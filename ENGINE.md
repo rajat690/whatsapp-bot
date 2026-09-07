@@ -25,10 +25,13 @@ Every discovery / collect turn follows this loop. **Rules own gates; the LLM onl
 6. **Soft buttons**  
    Consent, yes/no, menus, and closed-choice collect slots: reply buttons (≤3) or a list (4–10), plus numbered text. Free-text slots stay chat.
 
-7. **Park / resume**  
+7. **Scheme lists (strict)**  
+   `scheme_list` / `cat_results` / `named_scheme_list` outbound body is **only** the deterministic formatter: scope note + intro + `N. Name [Central|State]` + footer. No LLM prose, no bullets (`•`), no second parallel list. Interactive rows (first 10; buttons if ≤3) use the same numbers; tapping a row opens detail. After detail, What next? stays a separate message.
+
+8. **Park / resume**  
    Leaving Family/Individual mid-collect for named / category / wife snapshots `session["parked"]`. User can say *Resume family profile*.
 
-8. **known_profile**  
+9. **known_profile**  
    Survives Individual ↔ Family ↔ Category. Seeded into new journeys. Wiped only on explicit restart (`restart`, `/start`, `start over`).
 
 ## ≤4 post-consent asks

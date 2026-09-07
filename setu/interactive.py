@@ -5,7 +5,9 @@ Meta limits (Cloud API):
 - List messages: 2–10 rows (we also allow 4–10 as the product preference);
   row title ≤24 chars; row description ≤72 chars; list button ≤20 chars.
 - Interactive body ≤1024 chars (plain text allows ~4096).
-- More than 10 options → plain-text numbered list only.
+- More than 10 options → plain-text numbered list only, except scheme-list
+  phases which keep numbered text for every match and interactive rows for
+  the first 10.
 If an interactive send fails, the same numbered body is resent as text.
 """
 
@@ -15,7 +17,7 @@ import re
 from typing import Any
 
 from . import category_catalog as cat
-from . import i18n
+from . import eligibility, i18n
 
 BUTTON_TITLE_MAX = 20
 LIST_ROW_TITLE_MAX = 24
@@ -124,6 +126,8 @@ def options_for_session(session: dict[str, Any]) -> list[tuple[str, str]]:
             ("Back to categories", i18n.t("after_categories", lang)),
             ("Main Menu", i18n.t("named_next_menu", lang)),
         ]
+    if phase in SCHEME_LIST_PHASES:
+        return [(row["id"], row["title"]) for row in scheme_option_rows(session)]
     return []
 
 
@@ -219,6 +223,29 @@ def _category_question_options(session: dict[str, Any], language: str | None) ->
 
 
 DETAIL_MENU_PHASES = frozenset({"named_scheme", "scheme_detail", "cat_detail"})
+SCHEME_LIST_PHASES = frozenset({"scheme_list", "cat_results", "named_scheme_list"})
+
+
+def scheme_option_rows(
+    session: dict[str, Any] | None,
+    schemes: list[dict[str, Any]] | None = None,
+) -> list[dict[str, str]]:
+    """Clickable scheme rows: id is the 1-based list number (same as typing N)."""
+    session = session or {}
+    items = schemes if schemes is not None else (session.get("matched_schemes") or [])
+    lang = session.get("language")
+    rows: list[dict[str, str]] = []
+    for i, scheme in enumerate(items[:MAX_LIST_ROWS], 1):
+        name = (scheme.get("Scheme Name") or "Scheme").strip() or "Scheme"
+        lib = i18n.library_label(scheme.get("_library"), lang)
+        tag = f" [{lib}]" if lib else ""
+        title = clip(f"{i}. {name}", LIST_ROW_TITLE_MAX)
+        row: dict[str, str] = {"id": str(i), "title": title}
+        fuller = f"{name}{tag}"
+        if fuller and fuller != title:
+            row["description"] = clip(fuller, LIST_ROW_DESC_MAX)
+        rows.append(row)
+    return rows
 
 
 def finalize(session: dict[str, Any], reply: str | None) -> str:
@@ -245,6 +272,21 @@ def finalize(session: dict[str, Any], reply: str | None) -> str:
                 "list_button": list_button,
                 "short_body": menu_prompt,
             },
+        }
+        return text
+
+    if phase in SCHEME_LIST_PHASES:
+        text = eligibility.drop_scheme_dump_prefix(text)
+        option_rows = scheme_option_rows(session)
+        if option_rows:
+            list_button = clip(i18n.t("interactive_choose_scheme", lang), LIST_BUTTON_MAX)
+        # Body is already the deterministic numbered listing — do not append a
+        # second truncated options block.
+        session["outbound"] = {
+            "body": text,
+            "options": option_rows,
+            "list_button": list_button,
+            "short_body": "",
         }
         return text
 
@@ -303,6 +345,8 @@ def _default_what_next() -> str:
 def _short_body(session: dict[str, Any]) -> str:
     phase = session.get("phase") or ""
     lang = session.get("language")
+    if phase in SCHEME_LIST_PHASES:
+        return ""
     if phase in ("named_scheme", "named_scheme_ask", "scheme_detail", "cat_detail"):
         return i18n.t("named_next_intro", lang)
     if phase == "consent":
@@ -372,12 +416,14 @@ def build_interactive_payload(
         }
     rows = []
     for opt in options[:MAX_LIST_ROWS]:
-        rows.append(
-            {
-                "id": str(opt.get("id") or "")[:200],
-                "title": clip(str(opt.get("title") or opt.get("id") or ""), LIST_ROW_TITLE_MAX),
-            }
-        )
+        row = {
+            "id": str(opt.get("id") or "")[:200],
+            "title": clip(str(opt.get("title") or opt.get("id") or ""), LIST_ROW_TITLE_MAX),
+        }
+        desc = str(opt.get("description") or "").strip()
+        if desc:
+            row["description"] = clip(desc, LIST_ROW_DESC_MAX)
+        rows.append(row)
     return {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",

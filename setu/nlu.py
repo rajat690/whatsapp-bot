@@ -1101,6 +1101,12 @@ def match_scheme_choice(text: str, schemes: list[dict[str, Any]]) -> dict[str, A
         idx = int(m.group(1)) - 1
         if 0 <= idx < len(schemes):
             return schemes[idx]
+    # Interactive truncated titles: "1. d. devaraj urs…"
+    m = re.match(r"^(\d{1,2})[.)]\s+", n)
+    if m:
+        idx = int(m.group(1)) - 1
+        if 0 <= idx < len(schemes):
+            return schemes[idx]
     for scheme in schemes:
         name = _norm(str(scheme.get("Scheme Name", "")))
         sn = str(scheme.get("SN", ""))
