@@ -139,7 +139,9 @@ _SLOT_PROMPTS: dict[str, dict[str, str]] = {
 
 _LABELS: dict[str, dict[str, str]] = {
     "state": {"English": "State", "Hindi": "\u0930\u093e\u091c\u094d\u092f", "Marathi": "\u0930\u093e\u091c\u094d\u092f", "Kannada": "\u0cb0\u0cbe\u0c9c\u0ccd\u0caf"},
+    "age": {"English": "Age", "Hindi": "\u0906\u092f\u0941", "Marathi": "\u0935\u092f", "Kannada": "\u0cb5\u0caf\u0cb8\u0ccd\u0cb8\u0cc1"},
     "age_group": {"English": "Age group", "Hindi": "\u0906\u092f\u0941 \u0935\u0930\u094d\u0917", "Marathi": "\u0935\u092f\u094b\u0917\u091f", "Kannada": "\u0cb5\u0caf\u0ccb\u0cae\u0cbf\u0ca4\u0cbf"},
+    "gender": {"English": "Gender", "Hindi": "\u0932\u093f\u0902\u0917", "Marathi": "\u0932\u093f\u0902\u0917", "Kannada": "\u0cb2\u0cbf\u0c82\u0c97"},
     "occupation": {"English": "Occupation", "Hindi": "\u092a\u0947\u0936\u093e", "Marathi": "\u0935\u094d\u092f\u0935\u0938\u093e\u092f", "Kannada": "\u0c89\u0ca6\u0ccd\u0caf\u0ccb\u0c97"},
     "household_income": {"English": "Household income", "Hindi": "\u092a\u093e\u0930\u093f\u0935\u093e\u0930\u093f\u0915 \u0906\u092f", "Marathi": "\u0915\u094c\u091f\u0941\u0902\u092c\u093f\u0915 \u0909\u0924\u094d\u092a\u0928\u094d\u0928", "Kannada": "\u0c95\u0cc1\u0c9f\u0cc1\u0c82\u0cac\u0ca6 \u0c86\u0ca6\u0cbe\u0caf"},
     "social_category": {"English": "Social category", "Hindi": "\u0938\u093e\u092e\u093e\u091c\u093f\u0915 \u0936\u094d\u0930\u0947\u0923\u0940", "Marathi": "\u0938\u093e\u092e\u093e\u091c\u093f\u0915 \u0936\u094d\u0930\u0947\u0923\u0940", "Kannada": "\u0cb8\u0cbe\u0cae\u0cbe\u0c9c\u0cbf\u0c95 \u0cb5\u0cb0\u0ccd\u0c97"},

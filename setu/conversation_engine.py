@@ -171,6 +171,15 @@ def collect_slot_defs(journey: dict[str, Any], journey_id: str | None = None) ->
     return [by_id[sid] for sid in collect_slot_ids(jid) if sid in by_id]
 
 
+def has_enough_match_profile(slots: dict[str, str] | None) -> bool:
+    """One-shot free text already has age + occupation + community."""
+    filled = slots or {}
+    has_age = bool(filled.get("age") or filled.get("age_group"))
+    has_occ = bool(filled.get("occupation") or filled.get("primary_occupation"))
+    has_community = bool(filled.get("social_category"))
+    return has_age and has_occ and has_community
+
+
 def missing_collect_slots(
     journey: dict[str, Any],
     slots: dict[str, str] | None,
@@ -181,6 +190,11 @@ def missing_collect_slots(
     for slot in collect_slot_defs(journey, journey_id):
         if not filled.get(slot["id"]):
             missing.append(slot)
+    # Age + occupation + community is enough to rank; skip leftover budget asks
+    # (typically household income) on a one-shot profile dump.
+    key = journey_key(journey_id or journey.get("id"))
+    if key == "journey_1" and has_enough_match_profile(filled):
+        return [m for m in missing if m["id"] == "state"]
     return missing
 
 
@@ -307,8 +321,14 @@ def apply_facts(
 def facts_from_signals(text: str, signals: dict[str, Any] | None) -> dict[str, str]:
     signals = signals or {}
     out: dict[str, str] = {}
+    if signals.get("age"):
+        out["age"] = str(signals["age"])
     if signals.get("age_group"):
         out["age_group"] = str(signals["age_group"])
+    if signals.get("social_category"):
+        out["social_category"] = str(signals["social_category"])
+    if signals.get("gender"):
+        out["gender"] = str(signals["gender"])
     occ = signals.get("occupation")
     if occ:
         out["occupation"] = str(occ)
@@ -334,6 +354,7 @@ def heard_you_bits(extracted: dict[str, str], language: str | None = None) -> st
     lang = i18n.normalize_language(language)
     order = (
         "state",
+        "age",
         "age_group",
         "occupation",
         "primary_occupation",
@@ -355,6 +376,8 @@ def heard_you_bits(extracted: dict[str, str], language: str | None = None) -> st
     for key in order:
         val = extracted.get(key)
         if not val or key in seen:
+            continue
+        if key == "age_group" and extracted.get("age"):
             continue
         if key == "primary_occupation" and extracted.get("occupation") == val:
             continue

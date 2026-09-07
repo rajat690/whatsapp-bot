@@ -25,8 +25,10 @@ from .session import get_session, reset_session
 PROFILE_LABELS = {
     "journey_1": {
         "state": "State",
+        "age": "Age",
         "age_group": "Age group",
         "occupation": "Occupation",
+        "gender": "Gender",
         "household_income": "Household income",
         "social_category": "Social category",
         "marital_status": "Marital status",
@@ -180,6 +182,8 @@ def _profile_summary(
     for key, fallback in labels.items():
         val = (slots or {}).get(key)
         if not val:
+            continue
+        if key == "age_group" and (slots or {}).get("age"):
             continue
         lines.append(f"• {i18n.profile_label(key, lang, fallback)}: {val}")
     lines.append("")
@@ -536,8 +540,19 @@ def _after_collect_facts(
     lang = _lang(session)
     missing = _missing_slots(journey, session.get("slots") or {})
     if not missing:
-        session["phase"] = "confirm_profile"
         session["collect_slot_id"] = None
+        gated = _gate_collect_consent(session, None)
+        if gated:
+            heard = _heard_prefix(applied, lang)
+            return (heard + "\n\n" + gated) if heard else gated
+        if session.get("oneshot_profile") or (
+            engine.has_enough_match_profile(applied)
+            and engine.has_enough_match_profile(session.get("slots") or {})
+        ):
+            heard = _heard_prefix(applied, lang)
+            listing = _emit_matches(session)
+            return (heard + "\n\n" + listing) if heard else listing
+        session["phase"] = "confirm_profile"
         summary = _profile_summary(session["slots"], session.get("journey_id"), lang)
         heard = _heard_prefix(applied, lang)
         if llm_reply and i18n.usable_collect_reply(llm_reply, lang, journey.get("slots") or []):
@@ -625,6 +640,8 @@ def _begin_journey_reply(session: dict[str, Any], journey: dict[str, Any], intro
     if gated:
         return intro + "\n\n" + gated
     if not missing:
+        if session.get("oneshot_profile"):
+            return intro + "\n\n" + _emit_matches(session)
         session["phase"] = "confirm_profile"
         return intro + "\n\n" + _profile_summary(session.get("slots") or {}, session.get("journey_id"), lang)
     return intro + "\n\n" + _ask_slot(missing[0], lang, session)
@@ -690,12 +707,50 @@ def _idle_from_named(session: dict[str, Any], text: str) -> str | None:
     return _route_idle_free_text(session, text)
 
 
+def _capture_profile_text(session: dict[str, Any], text: str) -> dict[str, str]:
+    """Extract every volunteered fact from a free-text dump into known_profile."""
+    signals = profile_intent.extract_signals(text)
+    session["profile_signals"] = signals
+    facts = engine.facts_from_signals(text, signals)
+    engine.merge_known_profile(session, facts)
+    return facts
+
+
+def _emit_matches(session: dict[str, Any]) -> str:
+    matched, scope_note = eligibility.match_schemes(
+        session.get("slots") or {}, journey_id=session.get("journey_id")
+    )
+    session["matched_schemes"] = matched
+    session["phase"] = "scheme_list"
+    return eligibility.format_scheme_list(
+        matched, scope_note=scope_note, language=session.get("language")
+    )
+
+
+def _route_oneshot_profile(session: dict[str, Any], text: str) -> str | None:
+    """Age + occupation + community (+ what schemes) → Individual match, not extra asks."""
+    facts = _capture_profile_text(session, text)
+    if not engine.has_enough_match_profile(facts):
+        return None
+    if not profile_intent.asks_for_schemes(text):
+        return None
+    session["oneshot_profile"] = True
+    lang = session.get("language") or category_intent.infer_category_language(text)
+    if lang and not session.get("language"):
+        session["language"] = lang
+    journey = _start_journey(session, "journey_1")
+    return _begin_journey_reply(session, journey, i18n.t("individual_intro", _lang(session)))
+
+
 def _route_idle_free_text(session: dict[str, Any], text: str) -> str | None:
     """Enforce free-text order: named (already tried) → category → shortcut/story → clarify."""
     if nlu.is_plain_menu_choice(text):
         return None
     if nlu.detect_language(text) and nlu._norm(text) in nlu.LANGUAGE_MAP:
         return None
+    oneshot = _route_oneshot_profile(session, text)
+    if oneshot:
+        return oneshot
     kind = profile_intent.classify_free_text(text)
     if kind == "named_scheme":
         return None
@@ -828,6 +883,10 @@ def _on_consent(session: dict[str, Any], text: str) -> str:
     if resume == "category":
         return category_path.after_consent(session)
     if resume == "confirm_profile":
+        if session.get("oneshot_profile") and engine.has_enough_match_profile(
+            session.get("slots") or {}
+        ):
+            return _emit_matches(session)
         session["phase"] = "confirm_profile"
         return pending or _profile_summary(
             session.get("slots") or {}, session.get("journey_id"), lang
@@ -843,6 +902,8 @@ def _on_consent(session: dict[str, Any], text: str) -> str:
     missing = _missing_slots(journey, session.get("slots") or {})
     if missing:
         return _ask_slot(missing[0], lang, session)
+    if session.get("oneshot_profile"):
+        return _emit_matches(session)
     session["phase"] = "confirm_profile"
     return _profile_summary(session.get("slots") or {}, session.get("journey_id"), lang)
 
@@ -990,7 +1051,7 @@ def _conversational_collect(
         session["language"] = llm_lang
 
     extracted = engine.extract_turn(session, journey, text)
-    extracted.update(_merge_llm_slots(data, allowed))
+    extracted.update(_merge_llm_slots(data, allowed | {"age", "gender"}))
     reply = (data.get("reply") or "").strip()
     return _after_collect_facts(
         session, journey, extracted, llm_reply=reply, switched_to=switched_to
@@ -1160,6 +1221,9 @@ def _execute_interrupt(session: dict[str, Any], text: str, hit: engine.Interrupt
             return _with_resume_hint(session, routed)
         return None
     if hit.kind == "shortcut":
+        oneshot = _route_oneshot_profile(session, text)
+        if oneshot:
+            return _with_resume_hint(session, oneshot)
         pack = profile_intent.detect_role_shortcut(text)
         if pack:
             kwargs: dict[str, Any] = {"language": lang}
@@ -1410,17 +1474,9 @@ def _handle_message_inner(user_id: str, text: str) -> str:
         if decision != "Proceed":
             return i18n.t("confirm_unclear", session.get("language"))
 
-        matched, scope_note = eligibility.match_schemes(
-            session["slots"], journey_id=session.get("journey_id")
-        )
-        session["matched_schemes"] = matched
-        session["phase"] = "scheme_list"
-
         # Rules own the list body: scope note + intro + numbered lines + footer.
         # Never prepend LLM prose (it dumps unnumbered bullets in production).
-        return eligibility.format_scheme_list(
-            matched, scope_note=scope_note, language=session.get("language")
-        )
+        return _emit_matches(session)
 
     # ---- scheme list ----
     if phase == "scheme_list":

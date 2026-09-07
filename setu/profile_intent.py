@@ -156,14 +156,20 @@ def mentions_multiple_people(text: str) -> bool:
 
 def extract_signals(text: str) -> dict[str, Any]:
     n = _norm(text)
+    years = nlu.detect_age_years(text)
     age = nlu.detect_age(text)
     occ = nlu._map_alias(text, nlu.OCCUPATION_ALIASES)
     kids = nlu.detect_count(text, prefer=False, kind="children")
     girl = bool(re.search(r"\bgirls?\b|बालिका|girl child", n, re.I))
     class_m = _CLASS_RE.search(text or "")
+    social = nlu._map_alias(text, nlu.CATEGORY_ALIASES)
+    gender = nlu.detect_gender(text)
     return {
+        "age": str(years) if years is not None else None,
         "age_group": age,
         "occupation": occ,
+        "social_category": social,
+        "gender": gender,
         "farmer": bool(_FARMER.search(text or "")),
         "labour": bool(_LABOUR.search(text or "") or (occ == "Labourer")),
         "children": kids,
@@ -172,6 +178,11 @@ def extract_signals(text: str) -> dict[str, Any]:
         "spouse": bool(re.search(r"\b(wife|spouse|husband|पत्नी|बीवी)\b", n, re.I)),
         "raw": (text or "").strip(),
     }
+
+
+def asks_for_schemes(text: str) -> bool:
+    """True when the user is asking which schemes they can get."""
+    return bool(_WHAT_CAN_I_GET.search(text or ""))
 
 
 def is_profile_story(text: str) -> bool:
@@ -378,9 +389,14 @@ def pack_for_children(signals: dict[str, Any] | None) -> str:
 def ack_bits(signals: dict[str, Any] | None, language: str | None) -> str:
     signals = signals or {}
     bits: list[str] = []
-    age = signals.get("age_group")
-    if age:
-        bits.append(str(age))
+    if signals.get("age"):
+        bits.append(str(signals["age"]))
+    else:
+        age = signals.get("age_group")
+        if age:
+            bits.append(str(age))
+    if signals.get("social_category"):
+        bits.append(str(signals["social_category"]))
     if signals.get("farmer") or signals.get("occupation") == "Farmer":
         bits.append("farmer" if (language or "English") == "English" else "किसान")
     if signals.get("labour") or signals.get("occupation") == "Labourer":
