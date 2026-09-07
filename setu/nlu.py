@@ -379,6 +379,29 @@ def is_language_switch_only(text: str) -> bool:
     return leftover == ""
 
 
+_PLAIN_MENU_KEYS = frozenset(MENU_MAP.keys()) | {
+    "1",
+    "1)",
+    "2",
+    "2)",
+    "3",
+    "3)",
+    "individual scheme",
+    "family scheme",
+    "browse",
+    "browse category",
+    "main menu",
+    "menu",
+}
+
+_SCHEME_ASK_RE = re.compile(
+    r"(yojana|yojane|yojna|scheme|योजना|ಯೋಜನೆ|"
+    r"tell me about|what is|what's|whats|"
+    r"के बारे में|बताओ|बताइए|बताएं|बताएँ|सांगा)",
+    re.I,
+)
+
+
 def detect_menu(text: str) -> str | None:
     n = _norm(text)
     if n in ("1", "1)"):
@@ -391,6 +414,25 @@ def detect_menu(text: str) -> str | None:
         if n == key or _contains_phrase(n, key):
             return val
     return None
+
+
+def is_plain_menu_choice(text: str) -> bool:
+    """True for a bare Individual / Family / Help / number tap — not a named scheme."""
+    n = _norm(text)
+    if not n:
+        return False
+    if n in _PLAIN_MENU_KEYS:
+        return True
+    # Allow a leading number + the same menu phrase ("1 individual").
+    n = re.sub(r"^[123][).:-]?\s+", "", n)
+    return n in _PLAIN_MENU_KEYS
+
+
+def looks_like_scheme_ask(text: str) -> bool:
+    """User is asking about a named scheme, not choosing a journey menu item."""
+    if is_plain_menu_choice(text):
+        return False
+    return bool(_SCHEME_ASK_RE.search(text or ""))
 
 
 def detect_state(text: str) -> str | None:

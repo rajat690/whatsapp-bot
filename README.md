@@ -7,6 +7,7 @@ Conversation-first WhatsApp prototype for discovering government schemes (Centra
 - **Conversational by default** — users answer in free text; the bot extracts profile slots with lightweight NLU (and an optional LLM when configured).
 - **Deterministic where required**
   - Eligibility matching against Central + state libraries (Karnataka / Maharashtra when selected)
+  - Named-scheme lookup (e.g. “tell me about Ujjwala”) against the same libraries — hit or honest miss, never invented facts or End Chat
   - Hard branches: Individual / Family / Browse category / Help → CRM, Proceed vs Edit, after-detail help / go back, Main Menu vs End Chat, feedback ratings
   - Confirmed slots used for matching
   - **Browse by category** is a structured, isolated tree (not LLM profile collection)
@@ -26,6 +27,7 @@ Conversation-first WhatsApp prototype for discovering government schemes (Centra
 - `setu/category_intent.py` — free-text category keyword → pack (named-scheme lookup wins when present)
 - `setu/nlu.py` — keyword/slot extraction (no LLM required; family counts including 0)
 - `setu/eligibility.py` — deterministic matcher (family-aware scoring for Journey 2; `match_category_schemes` for the category path)
+- `setu/lookup.py` — named-scheme identity search (Central + Karnataka + Maharashtra)
 - `setu/llm.py` — optional OpenAI-compatible dialogue layer
 - `setu/session.py` — in-memory sessions (reset on process restart)
 - `data/journey1.json` — Individual slots + hard branches
