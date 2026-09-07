@@ -182,7 +182,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "Kannada": "\u0c87\u0cb2\u0ccd\u0cb2\u0cbf\u0caf\u0cb5\u0cb0\u0cc6\u0c97\u0cc6 \u0ca8\u0ca8\u0ccd\u0ca8 \u0cac\u0cb3\u0cbf \u0c87\u0cb0\u0cc1\u0cb5 \u0cae\u0cbe\u0cb9\u0cbf\u0ca4\u0cbf:",
     },
     "profile_confirm": {
-        "English": "Does this look right? Reply *Proceed* or *Edit details*.",
+        "English": "Does this look right?",
         "Hindi": "\u0915\u094d\u092f\u093e \u092f\u0939 \u0938\u0939\u0940 \u0939\u0948? *Proceed* \u092f\u093e *Edit details* \u0932\u093f\u0916\u0947\u0902\u0964",
         "Marathi": "\u0939\u0947 \u092c\u0930\u094b\u092c\u0930 \u0906\u0939\u0947 \u0915\u093e? *Proceed* \u0915\u093f\u0902\u0935\u093e *Edit details* \u0932\u093f\u0939\u093e.",
         "Kannada": "\u0c87\u0ca6\u0cc1 \u0cb8\u0cb0\u0cbf\u0caf\u0cbe\u0c97\u0cbf\u0ca6\u0cc6\u0caf\u0cc7? *Proceed* \u0c85\u0ca5\u0cb5\u0cbe *Edit details* \u0c8e\u0c82\u0ca6\u0cc1 \u0cac\u0cb0\u0cc6\u0caf\u0cbf\u0cb0\u0cbf.",
@@ -205,14 +205,198 @@ _STRINGS: dict[str, dict[str, str]] = {
         "Marathi": "\u0938\u092e\u091c\u0932\u0947.",
         "Kannada": "\u0cb8\u0cb0\u0cbf.",
     },
+    "main_menu_header": {
+        "English": "What would you like to explore today?",
+        "Hindi": "आज आप क्या देखना चाहेंगे?",
+        "Marathi": "आज तुम्हाला काय पाहायचे आहे?",
+        "Kannada": "ಇಂದು ನೀವು ಏನನ್ನು ನೋಡಲು ಬಯಸುತ್ತೀರಿ?",
+    },
+    "menu_opt_individual": {
+        "English": "Individual schemes",
+        "Hindi": "व्यक्तिगत योजनाएँ",
+        "Marathi": "वैयक्तिक योजना",
+        "Kannada": "ವೈಯಕ್ತಿಕ ಯೋಜನೆಗಳು",
+    },
+    "menu_opt_family": {
+        "English": "Family schemes",
+        "Hindi": "परिवार योजनाएँ",
+        "Marathi": "कुटुंब योजना",
+        "Kannada": "ಕುಟುಂಬ ಯೋಜನೆಗಳು",
+    },
+    "menu_opt_category": {
+        "English": "Browse by category",
+        "Hindi": "श्रेणी से खोजें",
+        "Marathi": "श्रेणीनुसार शोधा",
+        "Kannada": "ವರ್ಗದಿಂದ ಹುಡುಕಿ",
+    },
+    "menu_opt_help": {
+        "English": "I need help",
+        "Hindi": "सहायता चाहिए",
+        "Marathi": "मदत हवी",
+        "Kannada": "ಸಹಾಯ ಬೇಕು",
+    },
     "main_menu": {
-        "English": "What would you like to explore today?\n1. Individual / व्यक्तिगत\n2. Family / परिवार\n3. Browse category / श्रेणी से खोजें\n\nYou can also type *I need help* for support.",
-        "Hindi": "आज आप क्या देखना चाहेंगे?\n1. व्यक्तिगत\n2. परिवार\n3. श्रेणी से खोजें\n\nसहायता के लिए *I need help* लिख सकते हैं।",
-        "Marathi": "आज तुम्हाला काय पाहायचे आहे?\n1. Individual / व्यक्तिगत\n2. Family / परिवार\n3. Browse category / श्रेणी से खोजें\n\nYou can also type *I need help* for support.",
-        "Kannada": "ಇಂದು ನೀವು ಏನನ್ನು ನೋಡಲು ಬಯಸುತ್ತೀರಿ?\n1. Individual / व्यक्तिगत\n2. Family / परिवार\n3. Browse category / श्रेणी से खोजें\n\nYou can also type *I need help* for support.",
+        "English": "What would you like to explore today?",
+        "Hindi": "आज आप क्या देखना चाहेंगे?",
+        "Marathi": "आज तुम्हाला काय पाहायचे आहे?",
+        "Kannada": "ಇಂದು ನೀವು ಏನನ್ನು ನೋಡಲು ಬಯಸುತ್ತೀರಿ?",
+    },
+    "consent_body": {
+        "English": (
+            "To suggest matching schemes, I will ask a few questions about you or your household. "
+            "Your answers are used *only* to find relevant schemes — not shared for other purposes. "
+            "Do you accept?"
+        ),
+        "Hindi": (
+            "मिलती-जुलती योजनाएँ सुझाने के लिए मैं आपके या आपके परिवार के बारे में कुछ सवाल पूछूँगा। "
+            "आपके जवाब *केवल* योजना खोजने के लिए इस्तेमाल होंगे — किसी और काम के लिए साझा नहीं किए जाएंगे। "
+            "क्या आप सहमत हैं?"
+        ),
+        "Marathi": (
+            "योग्य योजना सुचवण्यासाठी मी तुमच्या किंवा तुमच्या कुटुंबाबद्दल काही प्रश्न विचारेन. "
+            "तुमची उत्तरे *फक्त* योजना शोधण्यासाठी वापरली जातील — इतर कारणांसाठी शेअर केली जाणार नाहीत. "
+            "तुम्ही सहमत आहात का?"
+        ),
+        "Kannada": (
+            "ಹೊಂದುವ ಯೋಜನೆಗಳನ್ನು ಸೂಚಿಸಲು ನಾನು ನಿಮ್ಮ ಅಥವಾ ನಿಮ್ಮ ಕುಟುಂಬದ ಬಗ್ಗೆ ಕೆಲವು ಪ್ರಶ್ನೆಗಳನ್ನು ಕೇಳುತ್ತೇನೆ. "
+            "ನಿಮ್ಮ ಉತ್ತರಗಳನ್ನು *ಯೋಜನೆ ಹುಡುಕಾಟಕ್ಕೆ ಮಾತ್ರ* ಬಳಸಲಾಗುತ್ತದೆ — ಬೇರೆ ಉದ್ದೇಶಕ್ಕೆ ಹಂಚಲಾಗುವುದಿಲ್ಲ. "
+            "ನೀವು ಒಪ್ಪುತ್ತೀರಾ?"
+        ),
+    },
+    "consent_accept": {
+        "English": "Accept",
+        "Hindi": "स्वीकार करें",
+        "Marathi": "स्वीकारा",
+        "Kannada": "ಒಪ್ಪುತ್ತೇನೆ",
+    },
+    "consent_decline": {
+        "English": "Decline",
+        "Hindi": "अस्वीकार करें",
+        "Marathi": "नाकारा",
+        "Kannada": "ನಿರಾಕರಿಸಿ",
+    },
+    "consent_declined": {
+        "English": "No problem. I will not collect more personal details. You can return to the Main menu anytime.",
+        "Hindi": "कोई बात नहीं। मैं और व्यक्तिगत जानकारी नहीं पूछूँगा। आप कभी भी मुख्य मेनू पर लौट सकते हैं।",
+        "Marathi": "हरकत नाही. मी आणखी वैयक्तिक माहिती विचारणार नाही. तुम्ही मुख्य मेनूवर परत जाऊ शकता.",
+        "Kannada": "ಪರವಾಗಿಲ್ಲ. ನಾನು ಇನ್ನು ವೈಯಕ್ತಿಕ ವಿವರಗಳನ್ನು ಕೇಳುವುದಿಲ್ಲ. ನೀವು ಮುಖ್ಯ ಮೆನುವಿಗೆ ಹಿಂತಿರುಗಬಹುದು.",
+    },
+    "consent_unclear": {
+        "English": "Please tap *Accept* to continue, or *Decline* to stop sharing details.",
+        "Hindi": "जारी रखने के लिए *Accept* चुनें, या जानकारी न देने के लिए *Decline*।",
+        "Marathi": "पुढे जाण्यासाठी *Accept* निवडा, किंवा थांबण्यासाठी *Decline*.",
+        "Kannada": "ಮುಂದುವರಿಸಲು *Accept* ಒತ್ತಿ, ಅಥವಾ ನಿಲ್ಲಿಸಲು *Decline*.",
+    },
+    "who_intro": {
+        "English": "Who should I look up schemes for?",
+        "Hindi": "किसके लिए योजनाएँ देखूँ?",
+        "Marathi": "कोणासाठी योजना शोधू?",
+        "Kannada": "ಯಾರಿಗಾಗಿ ಯೋಜನೆಗಳನ್ನು ಹುಡುಕಲಿ?",
+    },
+    "who_clarify": {
+        "English": "I can help — who is this for?",
+        "Hindi": "मैं मदद कर सकता हूँ — यह किसके लिए है?",
+        "Marathi": "मी मदत करू शकतो — हे कोणासाठी आहे?",
+        "Kannada": "ನಾನು ಸಹಾಯ ಮಾಡಬಲ್ಲೆ — ಇದು ಯಾರಿಗಾಗಿ?",
+    },
+    "who_ack": {
+        "English": "Thanks — I noted {bits}.",
+        "Hindi": "धन्यवाद — मैंने यह नोट किया: {bits}।",
+        "Marathi": "धन्यवाद — मी नोंदवले: {bits}.",
+        "Kannada": "ಧನ್ಯವಾದ — ನಾನು ಇದನ್ನು ಗಮನಿಸಿದೆ: {bits}.",
+    },
+    "who_me": {
+        "English": "Schemes for me",
+        "Hindi": "मेरे लिए योजनाएँ",
+        "Marathi": "माझ्यासाठी योजना",
+        "Kannada": "ನನಗಾಗಿ ಯೋಜನೆಗಳು",
+    },
+    "who_wife": {
+        "English": "Schemes for my wife / spouse",
+        "Hindi": "पत्नी / जीवनसाथी के लिए",
+        "Marathi": "पत्नी / जोडीदारासाठी",
+        "Kannada": "ಪತ್ನಿ / ಸಂಗಾತಿಗಾಗಿ",
+    },
+    "who_children": {
+        "English": "Schemes for my children",
+        "Hindi": "बच्चों के लिए योजनाएँ",
+        "Marathi": "मुलांसाठी योजना",
+        "Kannada": "ಮಕ್ಕಳಿಗಾಗಿ ಯೋಜನೆಗಳು",
+    },
+    "who_family": {
+        "English": "Whole family",
+        "Hindi": "पूरा परिवार",
+        "Marathi": "संपूर्ण कुटुंब",
+        "Kannada": "ಇಡೀ ಕುಟುಂಬ",
+    },
+    "who_category": {
+        "English": "Browse by category",
+        "Hindi": "श्रेणी से खोजें",
+        "Marathi": "श्रेणीनुसार शोधा",
+        "Kannada": "ವರ್ಗದಿಂದ ಹುಡುಕಿ",
+    },
+    "who_menu": {
+        "English": "Main menu",
+        "Hindi": "मुख्य मेनू",
+        "Marathi": "मुख्य मेनू",
+        "Kannada": "ಮುಖ್ಯ ಮೆನು",
+    },
+    "who_unclear": {
+        "English": "Please choose who this is for, or Main menu.",
+        "Hindi": "कृपया चुनें यह किसके लिए है, या मुख्य मेनू।",
+        "Marathi": "कृपया कोणासाठी ते निवडा, किंवा मुख्य मेनू.",
+        "Kannada": "ದಯವಿಟ್ಟು ಇದು ಯಾರಿಗೆಂದು ಆಯ್ಕೆಮಾಡಿ, ಅಥವಾ ಮುಖ್ಯ ಮೆನು.",
+    },
+    "confirm_proceed": {
+        "English": "Proceed",
+        "Hindi": "आगे बढ़ें",
+        "Marathi": "पुढे जा",
+        "Kannada": "ಮುಂದುವರಿಸಿ",
+    },
+    "confirm_edit": {
+        "English": "Edit details",
+        "Hindi": "विवरण बदलें",
+        "Marathi": "तपशील बदला",
+        "Kannada": "ವಿವರ ಬದಲಿಸಿ",
+    },
+    "end_opt_menu": {
+        "English": "Main Menu",
+        "Hindi": "मुख्य मेनू",
+        "Marathi": "मुख्य मेनू",
+        "Kannada": "ಮುಖ್ಯ ಮೆನು",
+    },
+    "end_opt_end": {
+        "English": "End Chat",
+        "Hindi": "चैट समाप्त",
+        "Marathi": "चॅट संपवा",
+        "Kannada": "ಚಾಟ್ ಮುಗಿಸಿ",
+    },
+    "after_back": {
+        "English": "Go Back",
+        "Hindi": "वापस जाएँ",
+        "Marathi": "मागे जा",
+        "Kannada": "ಹಿಂದೆ ಹೋಗಿ",
+    },
+    "after_other": {
+        "English": "Other schemes",
+        "Hindi": "अन्य योजनाएँ",
+        "Marathi": "इतर योजना",
+        "Kannada": "ಇತರೆ ಯೋಜನೆಗಳು",
+    },
+    "after_categories": {
+        "English": "Back to categories",
+        "Hindi": "श्रेणियों पर वापस",
+        "Marathi": "श्रेणींकडे परत",
+        "Kannada": "ವರ್ಗಗಳಿಗೆ ಹಿಂದಿರುಗಿ",
+    },
+    "interactive_choose": {
+        "English": "Choose",
+        "Hindi": "चुनें",
+        "Marathi": "निवडा",
+        "Kannada": "ಆಯ್ಕೆ",
     },
     "menu_unclear": {
-        "English": "Please choose 1 Individual, 2 Family, or 3 Browse category. You can also type I need help.",
+        "English": "Please choose 1 Individual, 2 Family, 3 Browse category, or 4 I need help.",
         "Hindi": "कृपया 1 व्यक्तिगत, 2 परिवार, या 3 श्रेणी से खोजें चुनें। सहायता के लिए I need help लिखें।",
         "Marathi": "Please choose 1 Individual, 2 Family, or 3 Browse category. You can also type I need help.",
         "Kannada": "Please choose 1 Individual, 2 Family, or 3 Browse category. You can also type I need help.",

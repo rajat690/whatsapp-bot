@@ -13,7 +13,7 @@ import re
 from typing import Any
 
 from . import category_catalog as cat
-from . import category_intent, eligibility, i18n, nlu
+from . import category_intent, consent, eligibility, i18n, nlu
 
 
 def start(session: dict[str, Any]) -> str:
@@ -27,11 +27,15 @@ def start_for_category(
     session: dict[str, Any],
     category_id: str,
     language: str | None = None,
+    preset: dict[str, str] | None = None,
+    pension_slice: bool = False,
 ) -> str:
     """Enter a known pack from free-text intent — skip the hub."""
     _reset_category_session(session, category_id=category_id)
     if language:
         session["language"] = language
+    session["pack_preset"] = dict(preset or {})
+    session["pension_slice"] = bool(pension_slice)
     lang = session.get("language")
     label = cat.label_of(category_id, lang)
     ack = i18n.t("cat_intent_ack", lang, category=label)
@@ -57,12 +61,22 @@ def _reset_category_session(session: dict[str, Any], category_id: str | None) ->
 
 def _after_state_ready(session: dict[str, Any]) -> str:
     """Hub when browsing; pack questions when the category is already known."""
+    if consent.should_gate(session):
+        session["phase"] = "consent"
+        session["consent_resume"] = "category"
+        return consent.prompt(session)
     cid = session.get("category_id")
     if cid and cid in cat.PACKS:
         return _begin_pack(session, cid)
     session["phase"] = "cat_hub"
     session["hub_screen"] = 1
     return _hub_prompt(session)
+
+
+def after_consent(session: dict[str, Any]) -> str:
+    """Continue the category path after the user accepts consent."""
+    session["consent"] = "accepted"
+    return _after_state_ready(session)
 
 
 def replay_after_language_switch(session: dict[str, Any]) -> str:
@@ -401,6 +415,10 @@ def _begin_pack(
         session["slots"]["state"] = state
     if preset:
         session["slots"].update(preset)
+    else:
+        packed = session.pop("pack_preset", None) or {}
+        if packed:
+            session["slots"].update(packed)
     session["category_id"] = category_id
     session["cat_q_index"] = 0
     session["phase"] = "cat_collect"

@@ -7,7 +7,18 @@ import re
 from pathlib import Path
 from typing import Any
 
-from . import category_intent, category_path, eligibility, i18n, llm, lookup, nlu
+from . import (
+    category_intent,
+    category_path,
+    consent,
+    eligibility,
+    i18n,
+    interactive,
+    llm,
+    lookup,
+    nlu,
+    profile_intent,
+)
 from .session import get_session, reset_session
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -140,6 +151,12 @@ def _continue_after_language_switch(session: dict[str, Any]) -> str:
         body = i18n.t("end_menu", lang)
     elif phase == "feedback":
         body = i18n.t("feedback_prompt", lang)
+    elif phase == "consent":
+        body = consent.prompt(session)
+    elif phase in ("who_first", "who_clarify"):
+        body = _who_prompt_body(session)
+    elif phase == "consent_declined":
+        body = consent.declined_message(session)
     else:
         body = _main_menu(lang)
     return ack + "\n\n" + body
@@ -351,6 +368,9 @@ def _handle_named_scheme_intent(session: dict[str, Any], text: str) -> str | Non
     phase = session.get("phase") or ""
     if session.get("path") == "category" or session.get("journey_id") == "schemes_by_category_v1":
         return None
+    if phase not in ("named_scheme", "named_scheme_list", "named_scheme_ask"):
+        if profile_intent.block_named_lookup(text):
+            return None
 
     if phase == "named_scheme":
         action = _detect_named_next(session, text)
@@ -362,7 +382,10 @@ def _handle_named_scheme_intent(session: dict[str, Any], text: str) -> str | Non
         if hits:
             _infer_language(session, text)
             return _present_named_schemes(session, hits)
-        if nlu.looks_like_scheme_ask(text):
+        idle = _idle_from_named(session, text)
+        if idle:
+            return idle
+        if nlu.looks_like_scheme_ask(text) and profile_intent.looks_like_scheme_name_query(text):
             return _named_scheme_miss(session, text)
         return i18n.t("named_unclear", session.get("language")) + "\n\n" + _named_next_prompt(session)
 
@@ -384,7 +407,10 @@ def _handle_named_scheme_intent(session: dict[str, Any], text: str) -> str | Non
         hits = lookup.search_schemes(text)
         if hits:
             return _present_named_schemes(session, hits)
-        if nlu.looks_like_scheme_ask(text):
+        idle = _idle_from_named(session, text)
+        if idle:
+            return idle
+        if nlu.looks_like_scheme_ask(text) and profile_intent.looks_like_scheme_name_query(text):
             return _named_scheme_miss(session, text)
         return (
             i18n.t("named_unclear", session.get("language"))
@@ -408,6 +434,9 @@ def _handle_named_scheme_intent(session: dict[str, Any], text: str) -> str | Non
             return _present_named_schemes(session, hits)
         if nlu.is_plain_menu_choice(text):
             return None
+        idle = _idle_from_named(session, text)
+        if idle:
+            return idle
         return _named_scheme_miss(session, text)
 
     ask = nlu.looks_like_scheme_ask(text)
@@ -434,9 +463,11 @@ def _handle_named_scheme_intent(session: dict[str, Any], text: str) -> str | Non
         best = int(hits[0].get("_lookup_score") or 0)
         # Discovery turns only auto-route a confident library identity.
         if ask or best >= 80 or not discovery:
+            if profile_intent.block_named_lookup(text):
+                return None
             _infer_language(session, text)
             return _present_named_schemes(session, hits)
-    if ask:
+    if ask and profile_intent.looks_like_scheme_name_query(text):
         _infer_language(session, text)
         return _named_scheme_miss(session, text)
     return None
@@ -490,7 +521,10 @@ def _maybe_category_intent(session: dict[str, Any], text: str) -> str | None:
     cid = category_intent.detect_category_intent(text)
     if cid:
         lang = session.get("language") or category_intent.infer_category_language(text)
-        return category_path.start_for_category(session, cid, language=lang)
+        extra: dict[str, Any] = {}
+        if cid == "disability":
+            extra["pension_slice"] = True
+        return category_path.start_for_category(session, cid, language=lang, **extra)
     if not category_intent.looks_like_unknown_category(text):
         return None
     lang = session.get("language")
@@ -503,12 +537,212 @@ def _maybe_category_intent(session: dict[str, Any], text: str) -> str | None:
     return miss + "\n\n" + _main_menu(lang)
 
 
+def _idle_from_named(session: dict[str, Any], text: str) -> str | None:
+    """Re-classify a life story / category / shortcut typed during a named-scheme step."""
+    if nlu.is_plain_menu_choice(text):
+        return None
+    if not (
+        profile_intent.block_named_lookup(text)
+        or profile_intent.classify_free_text(text) in ("category", "shortcut", "who_first", "vague")
+    ):
+        return None
+    return _route_idle_free_text(session, text)
+
+
+def _route_idle_free_text(session: dict[str, Any], text: str) -> str | None:
+    """Enforce free-text order: named (already tried) → category → shortcut/story → clarify."""
+    if nlu.is_plain_menu_choice(text):
+        return None
+    if nlu.detect_language(text) and nlu._norm(text) in nlu.LANGUAGE_MAP:
+        return None
+    kind = profile_intent.classify_free_text(text)
+    if kind == "named_scheme":
+        return None
+    if kind == "category" and not profile_intent.skip_category_keyword(text):
+        return _start_known_or_unknown_category(session, text)
+    if kind == "shortcut":
+        pack = profile_intent.detect_role_shortcut(text)
+        if pack:
+            lang = session.get("language") or category_intent.infer_category_language(text)
+            kwargs: dict[str, Any] = {"language": lang}
+            if pack == "disability":
+                kwargs["pension_slice"] = True
+            if pack == "women_child":
+                kwargs["preset"] = {"who": "pregnant_lactating"}
+            return category_path.start_for_category(session, pack, **kwargs)
+        return None
+    if kind == "who_first":
+        return _present_who_first(session, text, clarify=False)
+    if kind == "vague":
+        return _present_who_first(session, text, clarify=True)
+    return _start_known_or_unknown_category(session, text)
+
+
+def _start_known_or_unknown_category(session: dict[str, Any], text: str) -> str | None:
+    """Category keyword or honest unknown-topic miss, even mid named-scheme."""
+    if category_intent.prefer_named_scheme(text):
+        return None
+    cid = category_intent.detect_category_intent(text)
+    if cid:
+        lang = session.get("language") or category_intent.infer_category_language(text)
+        extra: dict[str, Any] = {}
+        if cid == "disability":
+            extra["pension_slice"] = True
+        return category_path.start_for_category(session, cid, language=lang, **extra)
+    if not category_intent.looks_like_unknown_category(text):
+        return None
+    lang = session.get("language")
+    miss = i18n.t("cat_unknown", lang)
+    session["phase"] = "main_menu"
+    session["path"] = None
+    session["journey_id"] = None
+    return miss + "\n\n" + _main_menu(lang)
+
+
+def _who_options(session: dict[str, Any]) -> list[tuple[str, str]]:
+    clarify = session.get("phase") == "who_clarify" or session.get("who_mode") == "clarify"
+    return interactive.who_options(session.get("language"), clarify=clarify)
+
+
+def _who_prompt_body(session: dict[str, Any]) -> str:
+    lang = _lang(session)
+    clarify = session.get("phase") == "who_clarify" or session.get("who_mode") == "clarify"
+    bits = profile_intent.ack_bits(session.get("profile_signals") or {}, lang)
+    if clarify:
+        body = i18n.t("who_clarify", lang)
+    elif bits:
+        body = i18n.t("who_ack", lang, bits=bits) + " " + i18n.t("who_intro", lang)
+    else:
+        body = i18n.t("who_intro", lang)
+    return interactive.with_numbered_options(body, _who_options(session))
+
+
+def _present_who_first(session: dict[str, Any], text: str, *, clarify: bool) -> str:
+    _infer_language(session, text)
+    session["path"] = None
+    session["journey_id"] = None
+    session["profile_signals"] = profile_intent.extract_signals(text)
+    session["who_mode"] = "clarify" if clarify else "story"
+    session["phase"] = "who_clarify" if clarify else "who_first"
+    opts = _who_options(session)
+    session["who_options"] = [oid for oid, _title in opts]
+    return _who_prompt_body(session)
+
+
+def _on_who_choice(session: dict[str, Any], text: str) -> str:
+    opts = _who_options(session)
+    choice = interactive.pick_by_number_or_id(text, opts)
+    if not choice:
+        return i18n.t("who_unclear", session.get("language")) + "\n\n" + _who_prompt_body(session)
+    signals = session.get("profile_signals") or {}
+    lang = session.get("language")
+    if choice == "who_me":
+        pack = profile_intent.pack_for_me(signals)
+        if pack:
+            extra: dict[str, Any] = {"language": lang}
+            if pack == "disability":
+                extra["pension_slice"] = True
+            return category_path.start_for_category(session, pack, **extra)
+        journey = _start_journey(session, "journey_1")
+        return (
+            i18n.t("individual_intro", lang)
+            + "\n\n"
+            + _ask_slot(journey["slots"][0], lang)
+        )
+    if choice == "who_wife":
+        return category_path.start_for_category(
+            session, "women_child", language=lang, preset={"who": "adult_woman"}
+        )
+    if choice == "who_children":
+        pack = profile_intent.pack_for_children(signals)
+        preset = {"who": "girl_child"} if pack == "women_child" else None
+        return category_path.start_for_category(session, pack, language=lang, preset=preset)
+    if choice == "who_family":
+        journey = _start_journey(session, "journey_2")
+        return (
+            i18n.t("family_intro", lang)
+            + "\n\n"
+            + _ask_slot(journey["slots"][0], lang)
+        )
+    if choice == "who_category":
+        return category_path.start(session)
+    if choice == "who_menu":
+        session["phase"] = "main_menu"
+        session["path"] = None
+        session["journey_id"] = None
+        return _main_menu(lang)
+    return i18n.t("who_unclear", lang) + "\n\n" + _who_prompt_body(session)
+
+
+def _on_consent(session: dict[str, Any], text: str) -> str:
+    choice = consent.detect(text)
+    lang = session.get("language")
+    if choice == "Decline":
+        session["consent"] = "declined"
+        session["pending_after_consent"] = None
+        session["path"] = None
+        session["journey_id"] = None
+        session["phase"] = "consent_declined"
+        return consent.declined_message(session)
+    if choice != "Accept":
+        return i18n.t("consent_unclear", lang) + "\n\n" + consent.prompt(session)
+    session["consent"] = "accepted"
+    resume = session.get("consent_resume")
+    pending = session.pop("pending_after_consent", None)
+    if resume == "category":
+        return category_path.after_consent(session)
+    if resume == "confirm_profile":
+        session["phase"] = "confirm_profile"
+        return pending or _profile_summary(
+            session.get("slots") or {}, session.get("journey_id"), lang
+        )
+    session["phase"] = "collect_profile"
+    if pending:
+        return pending
+    journey = load_journey(session.get("journey_id"))
+    missing = _missing_slots(journey, session.get("slots") or {})
+    if missing:
+        return _ask_slot(missing[0], lang)
+    session["phase"] = "confirm_profile"
+    return _profile_summary(session.get("slots") or {}, session.get("journey_id"), lang)
+
+
+def _gate_collect_consent(session: dict[str, Any], pending: str | None) -> str | None:
+    if not consent.should_gate(session):
+        return None
+    journey = load_journey(session.get("journey_id"))
+    missing = _missing_slots(journey, session.get("slots") or {})
+    session["pending_after_consent"] = pending
+    session["consent_resume"] = "confirm_profile" if not missing else "collect_profile"
+    if not missing and not pending:
+        session["pending_after_consent"] = _profile_summary(
+            session.get("slots") or {}, session.get("journey_id"), session.get("language")
+        )
+        session["consent_resume"] = "confirm_profile"
+    session["phase"] = "consent"
+    return consent.prompt(session)
+
+
+def _on_consent_declined(session: dict[str, Any], text: str) -> str:
+    if (
+        nlu.detect_end_choice(text) == "Main Menu"
+        or interactive.pick_by_number_or_id(
+            text, [("Main Menu", i18n.t("named_next_menu", session.get("language")))]
+        )
+        == "Main Menu"
+        or nlu._norm(text) in ("1", "1)")
+    ):
+        session["phase"] = "main_menu"
+        return _main_menu(session.get("language"))
+    return consent.declined_message(session)
+
+
 def _welcome() -> str:
-    return (
+    return interactive.with_numbered_options(
         "Hi! Welcome to SETU. I can help you discover government schemes "
         "or get support with an issue.\n\n"
-        "Which language would you like to continue in?\n"
-        "English / Hindi / Marathi / Kannada"
+        "Which language would you like to continue in?",
+        interactive.language_options("English"),
     )
 
 
@@ -794,6 +1028,11 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
 
 
 def handle_message(user_id: str, text: str) -> str:
+    reply = _handle_message_inner(user_id, text)
+    return interactive.finalize(get_session(user_id), reply)
+
+
+def _handle_message_inner(user_id: str, text: str) -> str:
     text = (text or "").strip()
     if not text:
         return "Please send a short message and I’ll help."
@@ -825,9 +1064,18 @@ def handle_message(user_id: str, text: str) -> str:
     # Language-switch-only: stay on the current step in the new language.
     # Never send these turns to the LLM — it may invent a Hindi-only refusal.
     if phase not in ("welcome_language", "cat_language") and nlu.is_language_switch_only(text):
+        if session.get("phase") == "consent":
+            return _continue_after_language_switch(session)
         if session.get("path") == "category" or session.get("journey_id") == "schemes_by_category_v1":
             return category_path.replay_after_language_switch(session)
         return _continue_after_language_switch(session)
+
+    if phase == "consent":
+        return _on_consent(session, text)
+    if phase == "consent_declined":
+        return _on_consent_declined(session, text)
+    if phase in ("who_first", "who_clarify"):
+        return _on_who_choice(session, text)
 
     # Isolated category path — Journey 1 / Journey 2 handlers never see these sessions.
     if session.get("path") == "category" or session.get("journey_id") == "schemes_by_category_v1":
@@ -841,9 +1089,9 @@ def handle_message(user_id: str, text: str) -> str:
 
     # ---- welcome / language ----
     if phase == "welcome_language":
-        cat_reply = _maybe_category_intent(session, text)
-        if cat_reply:
-            return cat_reply
+        idle = _route_idle_free_text(session, text)
+        if idle:
+            return idle
         convo = _conversational_openers(phase, session, text)
         if convo:
             return convo
@@ -862,14 +1110,15 @@ def handle_message(user_id: str, text: str) -> str:
         # Button 3 / explicit category tap is deterministic intent — do not send to LLM.
         if nlu.detect_menu(text) == "Browse by category" and not category_intent.detect_category_intent(text):
             return category_path.start(session)
-        # Free-text topic ("scholarship") starts that pack — not Individual/Family collect.
-        cat_reply = _maybe_category_intent(session, text)
-        if cat_reply:
-            return cat_reply
+        idle = _route_idle_free_text(session, text)
+        if idle:
+            return idle
         convo = _conversational_openers(phase, session, text)
         if convo:
             return convo
         choice = nlu.detect_menu(text)
+        if nlu._norm(text) in ("4", "4)"):
+            choice = "I need help"
         if not choice:
             return i18n.t("menu_unclear", session.get("language"))
         if choice == "I need help":
@@ -925,6 +1174,9 @@ def handle_message(user_id: str, text: str) -> str:
     # ---- collect profile (conversational) ----
     if phase == "collect_profile":
         convo = _conversational_collect(session, journey, text, switched_to=switched_to)
+        gated = _gate_collect_consent(session, convo)
+        if gated:
+            return gated
         if convo:
             return convo
 
@@ -949,13 +1201,26 @@ def handle_message(user_id: str, text: str) -> str:
             if extracted:
                 parts.append(i18n.t("got_it_short", lang))
             parts.append(_ask_slot(missing[0], lang))
-            return "\n\n".join(parts)
-
-        session["phase"] = "confirm_profile"
-        return _profile_summary(session["slots"], session.get("journey_id"), lang)
+            next_reply = "\n\n".join(parts)
+        else:
+            session["phase"] = "confirm_profile"
+            next_reply = _profile_summary(session["slots"], session.get("journey_id"), lang)
+        gated = _gate_collect_consent(session, next_reply)
+        if gated:
+            return gated
+        return next_reply
 
     # ---- confirm profile (deterministic branch) ----
     if phase == "confirm_profile":
+        picked = interactive.pick_by_number_or_id(
+            text,
+            [
+                ("Proceed", i18n.t("confirm_proceed", session.get("language"))),
+                ("Edit details", i18n.t("confirm_edit", session.get("language"))),
+            ],
+        )
+        if picked:
+            text = picked
         decision = nlu.detect_confirm(text)
         if decision is None and llm.llm_configured():
             data = llm.chat_json(
@@ -1103,10 +1368,26 @@ def handle_message(user_id: str, text: str) -> str:
 
     # ---- end menu ----
     if phase == "end_menu":
-        cat_reply = _maybe_category_intent(session, text)
-        if cat_reply:
-            return cat_reply
+        idle = _route_idle_free_text(session, text)
+        if idle:
+            return idle
         choice = nlu.detect_end_choice(text)
+        if interactive.pick_by_number_or_id(
+            text,
+            [
+                ("Main Menu", i18n.t("end_opt_menu", session.get("language"))),
+                ("End Chat", i18n.t("end_opt_end", session.get("language"))),
+            ],
+        ) == "Main Menu":
+            choice = "Main Menu"
+        if interactive.pick_by_number_or_id(
+            text,
+            [
+                ("Main Menu", i18n.t("end_opt_menu", session.get("language"))),
+                ("End Chat", i18n.t("end_opt_end", session.get("language"))),
+            ],
+        ) == "End Chat":
+            choice = "End Chat"
         if choice == "Main Menu":
             session["phase"] = "main_menu"
             session["journey_id"] = None

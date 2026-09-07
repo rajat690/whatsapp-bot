@@ -9,6 +9,7 @@ from setu import category_catalog as cat
 from setu import category_intent, nlu
 from setu.orchestrator import handle_message
 from setu.session import get_session, reset_session
+from tests.helpers import accept_consent
 
 
 def _walk_to_menu(uid: str, language: str = "English") -> None:
@@ -102,6 +103,7 @@ class CategoryIntentWalkTests(unittest.TestCase):
         self.assertNotIn("Pick a topic", reply)
 
         reply = handle_message(uid, "2")  # Karnataka
+        reply = accept_consent(uid) or reply
         session = get_session(uid)
         self.assertEqual(session["phase"], "cat_collect")
         self.assertEqual(session["category_id"], "scholarship")
@@ -128,6 +130,7 @@ class CategoryIntentWalkTests(unittest.TestCase):
         self.assertIn("Pension", reply)
 
         reply = handle_message(uid, "Karnataka")
+        reply = accept_consent(uid) or reply
         self.assertEqual(get_session(uid)["phase"], "cat_collect")
         self.assertIn("1 of 4", reply)
         self.assertIn("pension", reply.lower())
@@ -148,6 +151,7 @@ class CategoryIntentWalkTests(unittest.TestCase):
         handle_message(uid, "bocw")
         self.assertEqual(get_session(uid)["category_id"], "labour_bocw")
         reply = handle_message(uid, "2")
+        reply = accept_consent(uid) or reply
         self.assertEqual(get_session(uid)["phase"], "cat_collect")
         self.assertIn("1 of 3", reply)
 
@@ -183,6 +187,7 @@ class CategoryIntentWalkTests(unittest.TestCase):
         self.assertIsNone(session.get("category_id"))
         handle_message(uid, "1")
         reply = handle_message(uid, "2")
+        reply = accept_consent(uid) or reply
         self.assertEqual(get_session(uid)["phase"], "cat_hub")
         self.assertIn("Education", reply)
 

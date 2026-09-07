@@ -53,7 +53,7 @@ Same as before:
 Keyword NLU works without an API key. Individual, Family, and category paths:
 
 ```bash
-python -m unittest tests.test_language_and_slots tests.test_category_path tests.test_category_intent
+python -m unittest tests.test_language_and_slots tests.test_category_path tests.test_category_intent tests.test_named_scheme tests.test_consent_and_interactive tests.test_profile_intent
 ```
 
 ```bash
@@ -69,6 +69,7 @@ for msg in [
     "English",
     "individual schemes",
     "I live in Karnataka",
+    "Accept",
     "I'm 28",
     "salaried",
     "around 25000",
@@ -90,6 +91,7 @@ for msg in [
     "English",
     "family schemes",
     "Karnataka",
+    "Accept",
     "5",
     "2",
     "1",
@@ -123,6 +125,7 @@ for msg in [
     "3",
     "1",
     "2",
+    "Accept",
     "1",
     "1",
     "1",
@@ -144,7 +147,8 @@ PY
 
 ## Notes
 
-- Interactive WhatsApp button/list replies are accepted if Meta sends them; the prototype mainly uses plain text for a conversational feel. Category hub is capped at 10 numbered rows (then More).
+- Interactive Cloud API send: **reply buttons** when there are 1–3 options (title ≤20 chars), **list messages** when there are 4–10 (row title ≤24). Numbered plain text is always included as fallback, and is the only send path if interactive send fails or there are more than 10 options. Inbound `button_reply` / `list_reply` ids are parsed back into the same keys the orchestrator already understands.
+- Consent is asked once language + state (or category state-scope) are known, before more profile/category questions or matching. Decline stops further PII collection and offers Main menu.
 - Eligibility is heuristic guidance only — always re-verify on official department sites.
 - In-memory sessions reset when Render restarts the service.
 - Journey 2 after-detail options are *I need help* | *Go Back*. Feedback: ratings 1–2 end the chat; 3–5 offer a referral.
