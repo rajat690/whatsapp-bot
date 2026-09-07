@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from . import i18n, translate
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 _STOP = {
@@ -350,46 +352,63 @@ def _useful(value: Any) -> str:
     return text
 
 
-def format_named_scheme_detail(scheme: dict[str, Any], next_prompt: str) -> str:
+def format_named_scheme_detail(
+    scheme: dict[str, Any],
+    next_prompt: str,
+    language: str | None = None,
+) -> str:
     """Numbered library card — name, about, eligibility, link. No invented facts."""
+    lang = i18n.normalize_language(language)
+    display = translate.localize_scheme(scheme, lang)
     name = _useful(scheme.get("Scheme Name")) or "Scheme"
-    lib = _useful(scheme.get("_library"))
-    about = _useful(scheme.get("Benefit"))
+    lib = i18n.library_label(scheme.get("_library"), lang)
+    about = _useful(display.get("Benefit"))
     eligibility_bits = [
-        _useful(scheme.get("Age Criteria")),
-        _useful(scheme.get("Income Criteria")),
-        _useful(scheme.get("Gender / Category Criteria")),
-        _useful(scheme.get("Other Key Eligibility Criteria")),
+        _useful(display.get("Age Criteria")),
+        _useful(display.get("Income Criteria")),
+        _useful(display.get("Gender / Category Criteria")),
+        _useful(display.get("Other Key Eligibility Criteria")),
     ]
     eligibility_bits = [b for b in eligibility_bits if b]
     link = extract_apply_link(scheme)
 
-    lines = [f"1. Name: *{name}*" + (f" ({lib})" if lib else "")]
+    lines = [
+        f"1. {i18n.t('named_field_name', lang)}: *{name}*"
+        + (f" ({lib})" if lib else "")
+    ]
     if about:
-        lines.append(f"2. About: {about}")
+        lines.append(f"2. {i18n.t('named_field_about', lang)}: {about}")
     if eligibility_bits:
         n = 3 if about else 2
-        lines.append(f"{n}. Eligibility: " + "; ".join(eligibility_bits))
+        lines.append(
+            f"{n}. {i18n.t('named_field_eligibility', lang)}: " + "; ".join(eligibility_bits)
+        )
     if link:
         n = 1 + sum(1 for x in (about, eligibility_bits) if x)
-        lines.append(f"{n + 1}. Apply / more info: {link}")
+        lines.append(f"{n + 1}. {i18n.t('named_field_apply', lang)}: {link}")
     lines.append("")
-    lines.append(
-        "This is from the SETU scheme library only — please re-verify on the official site."
-    )
+    lines.append(i18n.t("named_library_note", lang))
     if next_prompt:
         lines.append("")
         lines.append(next_prompt)
     return "\n".join(lines)
 
 
-def format_named_scheme_list(schemes: list[dict[str, Any]], intro: str, footer: str) -> str:
+def format_named_scheme_list(
+    schemes: list[dict[str, Any]],
+    intro: str,
+    footer: str,
+    language: str | None = None,
+) -> str:
+    lang = i18n.normalize_language(language)
+    benefits = [_useful(s.get("Benefit")) for s in schemes]
+    localized = translate.translate_many(benefits, lang)
     lines = [intro, ""]
     for i, scheme in enumerate(schemes, 1):
         name = scheme.get("Scheme Name") or "Scheme"
-        lib = scheme.get("_library") or ""
+        lib = i18n.library_label(scheme.get("_library"), lang)
         tag = f" ({lib})" if lib else ""
-        about = _useful(scheme.get("Benefit"))
+        about = localized[i - 1]
         row = f"{i}. {name}{tag}"
         if about:
             row += f" — {about}"

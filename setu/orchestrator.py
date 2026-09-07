@@ -99,7 +99,10 @@ def _continue_after_language_switch(session: dict[str, Any]) -> str:
     elif phase == "confirm_profile":
         body = _profile_summary(session.get("slots") or {}, session.get("journey_id"), lang)
     elif phase == "scheme_list":
-        body = eligibility.format_scheme_list(session.get("matched_schemes") or [])
+        body = eligibility.format_scheme_list(
+            session.get("matched_schemes") or [],
+            language=lang,
+        )
     elif phase == "scheme_detail":
         scheme_sn = session.get("selected_scheme_sn")
         schemes = session.get("matched_schemes") or []
@@ -108,9 +111,29 @@ def _continue_after_language_switch(session: dict[str, Any]) -> str:
             body = eligibility.format_scheme_detail(
                 scheme,
                 back_prompt=_after_detail_prompt(session.get("journey_id"), lang),
+                language=lang,
             )
         else:
             body = _main_menu(lang)
+    elif phase == "named_scheme":
+        scheme_sn = session.get("selected_scheme_sn")
+        schemes = session.get("matched_schemes") or []
+        scheme = next((s for s in schemes if str(s.get("SN")) == str(scheme_sn)), None)
+        if scheme:
+            body = lookup.format_named_scheme_detail(
+                scheme, _named_next_prompt(session), language=lang
+            )
+        else:
+            body = _named_next_prompt(session)
+    elif phase == "named_scheme_list":
+        body = lookup.format_named_scheme_list(
+            session.get("matched_schemes") or [],
+            i18n.t("named_list_intro", lang),
+            i18n.t("named_list_footer", lang),
+            language=lang,
+        )
+    elif phase == "named_scheme_ask":
+        body = i18n.t("named_ask_another", lang)
     elif phase == "help_crm":
         body = i18n.t("help_intro", lang)
     elif phase == "end_menu":
@@ -236,13 +259,14 @@ def _present_named_schemes(session: dict[str, Any], hits: list[dict[str, Any]]) 
     if len(hits) == 1:
         session["phase"] = "named_scheme"
         session["selected_scheme_sn"] = hits[0].get("SN")
-        return lookup.format_named_scheme_detail(hits[0], next_prompt)
+        return lookup.format_named_scheme_detail(hits[0], next_prompt, language=lang)
     session["phase"] = "named_scheme_list"
     session["selected_scheme_sn"] = None
     return lookup.format_named_scheme_list(
         hits,
         i18n.t("named_list_intro", lang),
         i18n.t("named_list_footer", lang),
+        language=lang,
     )
 
 
@@ -348,7 +372,9 @@ def _handle_named_scheme_intent(session: dict[str, Any], text: str) -> str | Non
         if chosen:
             session["phase"] = "named_scheme"
             session["selected_scheme_sn"] = chosen.get("SN")
-            return lookup.format_named_scheme_detail(chosen, _named_next_prompt(session))
+            return lookup.format_named_scheme_detail(
+                chosen, _named_next_prompt(session), language=session.get("language")
+            )
         action = _detect_named_next(session, text)
         # Numbers belong to the scheme list while it is on screen.
         if action and not re.fullmatch(r"\d{1,2}", text.lower().strip()):
@@ -367,6 +393,7 @@ def _handle_named_scheme_intent(session: dict[str, Any], text: str) -> str | Non
                 schemes,
                 i18n.t("named_list_intro", session.get("language")),
                 i18n.t("named_list_footer", session.get("language")),
+                language=session.get("language"),
             )
         )
 
@@ -963,7 +990,9 @@ def handle_message(user_id: str, text: str) -> str:
         session["matched_schemes"] = matched
         session["phase"] = "scheme_list"
 
-        listing = eligibility.format_scheme_list(matched, scope_note=scope_note)
+        listing = eligibility.format_scheme_list(
+            matched, scope_note=scope_note, language=session.get("language")
+        )
         if llm.llm_configured():
             intro = llm.chat_text(
                 SYSTEM_PERSONA
@@ -1006,7 +1035,7 @@ def handle_message(user_id: str, text: str) -> str:
             return (
                 i18n.t("scheme_pick", session.get("language"))
                 + "\n\n"
-                + eligibility.format_scheme_list(schemes)
+                + eligibility.format_scheme_list(schemes, language=session.get("language"))
             )
         session["selected_scheme_sn"] = chosen.get("SN")
         session["phase"] = "scheme_detail"
@@ -1018,6 +1047,7 @@ def handle_message(user_id: str, text: str) -> str:
             back_prompt=_after_detail_prompt(
                 session.get("journey_id"), session.get("language")
             ),
+            language=session.get("language"),
         )
 
     # ---- scheme detail ----
@@ -1028,7 +1058,9 @@ def handle_message(user_id: str, text: str) -> str:
             return i18n.t("help_intro", session.get("language"))
         if action in ("View other schemes", "Go Back") or "other" in low or "list" in low or "back" in low:
             session["phase"] = "scheme_list"
-            return eligibility.format_scheme_list(session.get("matched_schemes") or [])
+            return eligibility.format_scheme_list(
+                session.get("matched_schemes") or [], language=session.get("language")
+            )
         schemes = session.get("matched_schemes") or []
         chosen = nlu.match_scheme_choice(text, schemes)
         if chosen:
@@ -1041,6 +1073,7 @@ def handle_message(user_id: str, text: str) -> str:
                 back_prompt=_after_detail_prompt(
                     session.get("journey_id"), session.get("language")
                 ),
+                language=session.get("language"),
             )
         # free-text question about scheme
         if llm.llm_configured():

@@ -93,6 +93,7 @@ def current_prompt(session: dict[str, Any]) -> str:
             schemes,
             footer=_results_footer(lang),
             intro=i18n.t("cat_results_intro", lang),
+            language=lang,
         )
     if phase == "cat_detail":
         scheme_sn = session.get("selected_scheme_sn")
@@ -102,6 +103,7 @@ def current_prompt(session: dict[str, Any]) -> str:
             return eligibility.format_scheme_detail(
                 scheme,
                 back_prompt=i18n.t("cat_after_detail", lang),
+                language=lang,
             )
         return i18n.t("cat_after_detail", lang)
     return _hub_prompt(session)
@@ -424,7 +426,7 @@ def _question_prompt(session: dict[str, Any]) -> str:
     hint = ""
     if idx == 0:
         show = pack.get("show_hint") or {}
-        hint_text = show.get(lang) or show.get("English") or ""
+        hint_text = cat.label_of(show, lang) if show else ""
         if hint_text:
             hint = hint_text + "\n\n"
     body = cat.label_of(q, lang)
@@ -476,6 +478,7 @@ def _run_match(session: dict[str, Any]) -> str:
         scope_note=scope_note,
         footer=_results_footer(lang),
         intro=i18n.t("cat_results_intro", lang),
+        language=lang,
     )
     return listing
 
@@ -499,6 +502,7 @@ def _on_results(session: dict[str, Any], text: str) -> str:
                 schemes,
                 footer=_results_footer(session.get("language")),
                 intro=i18n.t("cat_results_intro", session.get("language")),
+                language=session.get("language"),
             )
         )
     session["selected_scheme_sn"] = chosen.get("SN")
@@ -506,6 +510,7 @@ def _on_results(session: dict[str, Any], text: str) -> str:
     return eligibility.format_scheme_detail(
         chosen,
         back_prompt=i18n.t("cat_after_detail", session.get("language")),
+        language=session.get("language"),
     )
 
 
@@ -520,6 +525,7 @@ def _on_detail(session: dict[str, Any], text: str) -> str:
             schemes,
             footer=_results_footer(session.get("language")),
             intro=i18n.t("cat_results_intro", session.get("language")),
+            language=session.get("language"),
         )
     if nlu.detect_after_scheme(text) == "I need help":
         session["path"] = None
@@ -533,5 +539,6 @@ def _on_detail(session: dict[str, Any], text: str) -> str:
         return eligibility.format_scheme_detail(
             chosen,
             back_prompt=i18n.t("cat_after_detail", session.get("language")),
+            language=session.get("language"),
         )
     return i18n.t("cat_after_detail", session.get("language"))

@@ -1,4 +1,4 @@
-"""Deterministic scheme eligibility matching (no LLM)."""
+"""Deterministic scheme eligibility matching. Library JSON stays English."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ import json
 import re
 from pathlib import Path
 from typing import Any
+
+from . import i18n, translate
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
@@ -386,14 +388,20 @@ def match_schemes(
     return results, scope_note
 
 
-def numbered_scheme_lines(schemes: list[dict[str, Any]]) -> list[str]:
+def numbered_scheme_lines(
+    schemes: list[dict[str, Any]],
+    language: str | None = None,
+) -> list[str]:
     """Running 1, 2, 3… list — never bullet-only scheme rows."""
+    lang = i18n.normalize_language(language)
+    benefits = [str(s.get("Benefit") or "") for s in schemes]
+    localized_benefits = translate.translate_many(benefits, lang)
     lines: list[str] = []
     for i, s in enumerate(schemes, 1):
-        lib = s.get("_library") or ""
+        lib = i18n.library_label(s.get("_library"), lang)
         tag = f" [{lib}]" if lib else ""
         name = s.get("Scheme Name") or "Scheme"
-        benefit = s.get("Benefit") or ""
+        benefit = localized_benefits[i - 1]
         if benefit:
             lines.append(f"{i}. {name}{tag} — {benefit}")
         else:
@@ -406,56 +414,51 @@ def format_scheme_list(
     scope_note: str = "",
     footer: str | None = None,
     intro: str | None = None,
+    language: str | None = None,
 ) -> str:
+    lang = i18n.normalize_language(language)
     if not schemes:
-        return (
-            "I couldn’t confidently match schemes from your details yet. "
-            "You can edit your profile or ask for help and our team can assist."
-        )
+        return i18n.t("scheme_list_empty", lang)
     lines = []
-    if scope_note:
-        lines.append(scope_note)
+    note = i18n.localize_scope_note(scope_note, lang) if scope_note else ""
+    if note:
+        lines.append(note)
         lines.append("")
-    lines.append(
-        intro
-        or (
-            "Based on what you shared, these schemes may be relevant "
-            "(final eligibility depends on official verification):"
-        )
-    )
+    lines.append(intro or i18n.t("scheme_list_intro", lang))
     lines.append("")
-    lines.extend(numbered_scheme_lines(schemes))
+    lines.extend(numbered_scheme_lines(schemes, lang))
     lines.append("")
-    lines.append(footer or "Reply with a number or scheme name to learn more.")
+    lines.append(footer or i18n.t("scheme_list_footer", lang))
     return "\n".join(lines)
 
 
-def format_scheme_detail(scheme: dict[str, Any], back_prompt: str | None = None) -> str:
+def format_scheme_detail(
+    scheme: dict[str, Any],
+    back_prompt: str | None = None,
+    language: str | None = None,
+) -> str:
+    lang = i18n.normalize_language(language)
+    display = translate.localize_scheme(scheme, lang)
     source = scheme.get("Beneficiary Count — Source Note") or ""
     link = ""
     m = re.search(r"https?://\S+", source)
     if m:
         link = m.group(0).rstrip("|").strip()
-    lib = scheme.get("_library")
+    lib = i18n.library_label(scheme.get("_library"), lang)
     parts = [
         f"*{scheme.get('Scheme Name')}*" + (f" ({lib})" if lib else ""),
-        f"Category: {scheme.get('Category')}",
-        f"Benefit: {scheme.get('Benefit')}",
-        f"Age: {scheme.get('Age Criteria')}",
-        f"Income: {scheme.get('Income Criteria')}",
-        f"Who: {scheme.get('Gender / Category Criteria')}",
-        f"Other: {scheme.get('Other Key Eligibility Criteria')}",
+        f"{i18n.t('scheme_field_category', lang)}: {display.get('Category')}",
+        f"{i18n.t('scheme_field_benefit', lang)}: {display.get('Benefit')}",
+        f"{i18n.t('scheme_field_age', lang)}: {display.get('Age Criteria')}",
+        f"{i18n.t('scheme_field_income', lang)}: {display.get('Income Criteria')}",
+        f"{i18n.t('scheme_field_who', lang)}: {display.get('Gender / Category Criteria')}",
+        f"{i18n.t('scheme_field_other', lang)}: {display.get('Other Key Eligibility Criteria')}",
     ]
     if link:
-        parts.append(f"More info: {link}")
+        parts.append(f"{i18n.t('scheme_field_more_info', lang)}: {link}")
     parts.append("")
-    parts.append(
-        "This is guidance only — please re-verify on the official site before applying."
-    )
-    parts.append(
-        back_prompt
-        or "Reply *help* for support, or *other schemes* to go back to the list."
-    )
+    parts.append(i18n.t("scheme_guidance", lang))
+    parts.append(back_prompt or i18n.t("scheme_detail_back", lang))
     return "\n".join(parts)
 
 
