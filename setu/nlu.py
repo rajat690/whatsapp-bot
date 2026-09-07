@@ -43,6 +43,16 @@ MENU_MAP = {
     "support": "I need help",
     "मदत": "I need help",
     "मदद": "I need help",
+    "browse category": "Browse by category",
+    "browse by category": "Browse by category",
+    "find by topic": "Browse by category",
+    "browse by topic": "Browse by category",
+    "by category": "Browse by category",
+    "by topic": "Browse by category",
+    "category": "Browse by category",
+    "श्रेणी से खोजें": "Browse by category",
+    "श्रेणी": "Browse by category",
+    "विषय": "Browse by category",
 }
 
 AGE_MAP = {
@@ -312,7 +322,7 @@ def detect_menu(text: str) -> str | None:
     if n in ("2", "2)"):
         return "Family Schemes"
     if n in ("3", "3)"):
-        return "I need help"
+        return "Browse by category"
     for key, val in sorted(MENU_MAP.items(), key=lambda kv: -len(kv[0])):
         if n == key or _contains_phrase(n, key):
             return val

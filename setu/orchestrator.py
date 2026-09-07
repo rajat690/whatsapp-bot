@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from . import eligibility, i18n, llm, nlu
+from . import category_path, eligibility, i18n, llm, nlu
 from .session import get_session, reset_session
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -108,6 +108,7 @@ def _after_detail_prompt(journey_id: str | None, language: str | None = None) ->
 
 
 def _start_journey(session: dict[str, Any], journey_id: str) -> dict[str, Any]:
+    session["path"] = None
     session["journey_id"] = journey_id
     session["phase"] = "collect_profile"
     session["slots"] = {}
@@ -305,7 +306,7 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
             + "\nUser is choosing a language. Return JSON: "
             '{"language": "English"|"Hindi"|"Marathi"|"Kannada"|null, "reply": "..."}. '
             "If unclear, ask again. If set, greet briefly IN THAT LANGUAGE and ask "
-            "Individual Schemes / Family Schemes / Help. Ask only that one menu question."
+            "1 Individual / 2 Family / 3 Browse category, or Help. Ask only that one menu question."
         )
         data = llm.chat_json(system, text, temperature=0.4)
         if not data:
@@ -321,10 +322,11 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
         system = (
             SYSTEM_PERSONA
             + i18n.language_instruction(session.get("language"))
-            + "\nUser is at main menu. Return JSON: "
-            '{"choice": "Individual Schemes"|"Family Schemes"|"I need help"|null, "reply": "..."}. '
+            +             "\nUser is at main menu. Return JSON: "
+            '{"choice": "Individual Schemes"|"Family Schemes"|"Browse by category"|"I need help"|null, "reply": "..."}. '
             "If Individual Schemes, start collecting an individual profile conversationally (ask state first). "
             "If Family Schemes, start collecting a household profile conversationally (ask state first). "
+            "If Browse by category, do NOT collect a profile — reply briefly that they can browse by topic. "
             "If help, ask what support they need. Ask exactly one question."
         )
         data = llm.chat_json(
@@ -347,13 +349,16 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
                 "Great. I’ll ask a few quick questions about your household, in plain chat.\n\n"
                 "Which state does your family live in?"
             )
+        if choice == "Browse by category":
+            started = category_path.start(session)
+            return (reply + "\n\n" + started) if reply else started
         if choice == "Individual Schemes":
             _start_journey(session, "journey_1")
             return reply or (
                 "Great. I’ll ask a few quick questions about you, in plain chat.\n\n"
                 "Which state do you live in?"
             )
-        return reply or "You can say Individual Schemes, Family Schemes, or I need help."
+        return reply or "You can say Individual, Family, Browse category, or I need help."
 
     if phase == "help_crm":
         system = (
@@ -403,7 +408,6 @@ def handle_message(user_id: str, text: str) -> str:
         return "Please send a short message and I’ll help."
 
     session = get_session(user_id)
-    journey = load_journey(session.get("journey_id"))
     phase = session["phase"]
     low = text.lower().strip()
     switched_to = None
@@ -425,6 +429,12 @@ def handle_message(user_id: str, text: str) -> str:
                 return warm
         return _welcome()
 
+    # Isolated category path — Journey 1 / Journey 2 handlers never see these sessions.
+    if session.get("path") == "category" or session.get("journey_id") == "schemes_by_category_v1":
+        return category_path.handle(session, text, user_id, switched_to=switched_to)
+
+    journey = load_journey(session.get("journey_id"))
+
     # ---- welcome / language ----
     if phase == "welcome_language":
         convo = _conversational_openers(phase, session, text)
@@ -442,6 +452,9 @@ def handle_message(user_id: str, text: str) -> str:
 
     # ---- main menu ----
     if phase == "main_menu":
+        # Button 3 / explicit category tap is deterministic intent — do not send to LLM.
+        if nlu.detect_menu(text) == "Browse by category":
+            return category_path.start(session)
         convo = _conversational_openers(phase, session, text)
         if convo:
             return convo
@@ -655,6 +668,7 @@ def handle_message(user_id: str, text: str) -> str:
         if choice == "Main Menu":
             session["phase"] = "main_menu"
             session["journey_id"] = None
+            session["path"] = None
             session["slots"] = {}
             session["matched_schemes"] = []
             session["selected_scheme_sn"] = None
