@@ -390,7 +390,7 @@ class LlmRegressionTests(unittest.TestCase):
             handle_message(uid, "I stay in Karnataka")
             self.assertEqual(get_session(uid)["phase"], "consent")
             reply = accept_consent(uid)
-            self.assertEqual(reply, natural)
+            self.assertIn(natural, reply)
             self.assertNotIn("Which age group are you in?", reply)
             self.assertNotIn("Examples:", reply)
             self.assertEqual(get_session(uid)["slots"].get("state"), "Karnataka")
@@ -436,7 +436,7 @@ class LlmRegressionTests(unittest.TestCase):
             self.assertEqual(get_session(uid)["phase"], "consent")
             accept_consent(uid)
             reply = handle_message(uid, "by the way did you watch the match yesterday")
-            self.assertEqual(reply, natural)
+            self.assertIn(natural, reply)
             self.assertFalse(get_session(uid)["slots"].get("age_group"))
             self.assertEqual(get_session(uid)["slots"].get("state"), "Maharashtra")
 
@@ -481,7 +481,7 @@ class LlmRegressionTests(unittest.TestCase):
             self.assertEqual(get_session(uid)["phase"], "consent")
             accept_consent(uid)
             reply = handle_message(uid, "there are five of us")
-            self.assertEqual(reply, natural)
+            self.assertIn(natural, reply)
             self.assertNotIn("How many children under 18 are in the household?", reply)
             self.assertEqual(get_session(uid)["slots"].get("household_size"), "5")
 

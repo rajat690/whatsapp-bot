@@ -92,6 +92,7 @@ OCCUPATION_ALIASES = {
     "jobless": "Unemployed",
     "homemaker": "Homemaker",
     "housewife": "Homemaker",
+    "house wife": "Homemaker",
     "retired": "Retired",
 }
 
@@ -586,6 +587,20 @@ def detect_count(
     if prefer and kind != "household" and n in ("none", "zero", "nil"):
         return "0"
 
+    # Prefer a number glued to the kind word so "50 yr old … 2 kids" is not 50.
+    kind_patterns = {
+        "children": r"\b(\d{1,2})\s*(?:kids?|children|child|girls?|boys?|minors?)\b",
+        "elders": r"\b(\d{1,2})\s*(?:elders?|seniors?|grandparents?)\b",
+        "household": r"\b(?:family of|household of|family size)\s*(\d{1,2})\b",
+    }
+    pat = kind_patterns.get(kind or "")
+    if pat:
+        m = re.search(pat, n)
+        if m:
+            num = int(m.group(1))
+            if 0 <= num <= 30:
+                return str(num)
+
     contextual = False
     if kind == "children" and any(
         p in n for p in ("child", "kid", "minor", "under 18", "below 18")
@@ -611,7 +626,16 @@ def detect_count(
     ):
         contextual = True
 
-    m = re.search(r"\b(\d{1,2})\b", n)
+    n_scan = re.sub(r"\b\d{1,3}\s*(?:years?|yrs?|yr|yo|y\.o\.?)\b", " ", n)
+    if kind == "household":
+        n_scan = re.sub(
+            r"\b\d{1,2}\s*(?:kids?|children|child|girls?|boys?|minors?|elders?|seniors?)\b",
+            " ",
+            n_scan,
+        )
+        n_scan = re.sub(r"\b\d{1,2}(?:st|nd|rd|th)\s*class\b", " ", n_scan)
+
+    m = re.search(r"\b(\d{1,2})\b", n_scan)
     if m:
         num = int(m.group(1))
         if 0 <= num <= 30 and (prefer or contextual):

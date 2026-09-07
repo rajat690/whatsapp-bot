@@ -47,9 +47,15 @@ def start_for_category(
 
 
 def _reset_category_session(session: dict[str, Any], category_id: str | None) -> None:
+    from . import conversation_engine as engine
+
+    engine.ensure_fields(session)
+    known = dict(session.get("known_profile") or {})
     session["path"] = cat.PATH_FLAG
     session["journey_id"] = cat.WORKFLOW_ID
     session["slots"] = {}
+    if known.get("state"):
+        session["slots"]["state"] = known["state"]
     session["matched_schemes"] = []
     session["selected_scheme_sn"] = None
     session["category_id"] = category_id
@@ -57,6 +63,7 @@ def _reset_category_session(session: dict[str, Any], category_id: str | None) ->
     session["hub_screen"] = 1
     session["pension_slice"] = False
     session["cat_q_index"] = 0
+    session["known_profile"] = known
 
 
 def _after_state_ready(session: dict[str, Any]) -> str:
@@ -193,18 +200,11 @@ def _wants_categories(text: str) -> bool:
 
 
 def _to_main_menu(session: dict[str, Any]) -> str:
+    from . import conversation_engine as engine
+
     lang = session.get("language")
-    session["path"] = None
-    session["journey_id"] = None
+    engine.clear_ephemeral_path(session)
     session["phase"] = "main_menu"
-    session["slots"] = {}
-    session["matched_schemes"] = []
-    session["selected_scheme_sn"] = None
-    session["category_id"] = None
-    session["state_scope"] = None
-    session["hub_screen"] = 1
-    session["pension_slice"] = False
-    session["cat_q_index"] = 0
     return i18n.t("main_menu", lang)
 
 

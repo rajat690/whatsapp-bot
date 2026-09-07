@@ -112,6 +112,10 @@ def options_for_session(session: dict[str, Any]) -> list[tuple[str, str]]:
         return catalog_options(cat.WHO_FIRST, lang)
     if phase == "cat_collect":
         return _category_question_options(session, lang)
+    if phase == "collect_profile":
+        from . import conversation_engine as engine
+
+        return engine.current_slot_options(session)
     if phase == "scheme_detail":
         return after_detail_options(session.get("journey_id"), lang)
     if phase == "cat_detail":
@@ -163,6 +167,7 @@ def named_next_options(session: dict[str, Any], language: str | None) -> list[tu
     keys = session.get("named_next_options") or []
     labels = {
         "another": i18n.t("named_next_another", language),
+        "resume": i18n.t("resume_opt", language),
         "Individual Schemes": i18n.t("named_next_individual", language),
         "Family Schemes": i18n.t("named_next_family", language),
         "Browse by category": i18n.t("named_next_category", language),
