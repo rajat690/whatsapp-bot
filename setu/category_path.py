@@ -29,6 +29,48 @@ def start(session: dict[str, Any]) -> str:
     return _language_prompt(session)
 
 
+def replay_after_language_switch(session: dict[str, Any]) -> str:
+    """Re-show the current category step in the new session language."""
+    return i18n.t("language_switch_ack", session.get("language")) + "\n\n" + current_prompt(session)
+
+
+def current_prompt(session: dict[str, Any]) -> str:
+    phase = session.get("phase") or "cat_language"
+    lang = session.get("language")
+    if phase == "cat_language":
+        return _language_prompt(session)
+    if phase == "cat_state_scope":
+        return _state_scope_prompt(session)
+    if phase == "cat_state_plus":
+        return i18n.t("cat_state_plus_prompt", lang) + "\n\n" + _numbered(cat.STATE_PLUS_CENTRAL, lang)
+    if phase == "cat_hub":
+        return _hub_prompt(session)
+    if phase == "cat_who":
+        return _who_prompt(session)
+    if phase == "cat_collect":
+        return _question_prompt(session)
+    if phase == "cat_results":
+        schemes = session.get("matched_schemes") or []
+        if not schemes:
+            return i18n.t("cat_no_match", lang) + "\n\n" + i18n.t("cat_results_footer", lang)
+        return eligibility.format_scheme_list(
+            schemes,
+            footer=_results_footer(lang),
+            intro=i18n.t("cat_results_intro", lang),
+        )
+    if phase == "cat_detail":
+        scheme_sn = session.get("selected_scheme_sn")
+        schemes = session.get("matched_schemes") or []
+        scheme = next((s for s in schemes if str(s.get("SN")) == str(scheme_sn)), None)
+        if scheme:
+            return eligibility.format_scheme_detail(
+                scheme,
+                back_prompt=i18n.t("cat_after_detail", lang),
+            )
+        return i18n.t("cat_after_detail", lang)
+    return _hub_prompt(session)
+
+
 def handle(
     session: dict[str, Any],
     text: str,
@@ -36,10 +78,12 @@ def handle(
     switched_to: str | None = None,
 ) -> str:
     phase = session.get("phase") or "cat_language"
-    lang = i18n.normalize_language(session.get("language"))
 
     if _wants_main_menu(text) and phase not in ("cat_language",):
         return _to_main_menu(session)
+
+    if nlu.is_language_switch_only(text) and phase != "cat_language":
+        return replay_after_language_switch(session)
 
     if phase == "cat_language":
         return _on_language(session, text)

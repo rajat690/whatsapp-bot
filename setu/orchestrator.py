@@ -47,8 +47,9 @@ SYSTEM_PERSONA = """You are SETU, a warm WhatsApp assistant that helps people in
 Style: short, natural chat messages (1-4 sentences). Sound like a helpful person, not a form or call-centre script.
 No markdown tables. Light WhatsApp formatting (*bold*) sparingly.
 Never invent scheme eligibility — the app will run a deterministic matcher.
-Languages: greet/accept English, Hindi, Marathi, Kannada.
+Languages: English, Hindi, Marathi, and Kannada are all fully supported. Never say you can only speak, help, or reply in one of them.
 Always reply in the session language. Never revert to an earlier language.
+If the user asks to shift/switch/change to English, Hindi, Marathi, or Kannada, continue in that language. Do not refuse.
 During profile collection: acknowledge what the user just said in plain words, then ask EXACTLY ONE outstanding fact.
 Never list, number, or combine remaining questions. Never paste option menus for several fields.
 """
@@ -63,12 +64,61 @@ def _lang(session: dict[str, Any] | None = None, language: str | None = None) ->
 
 
 def _apply_language_switch(session: dict[str, Any], text: str) -> str | None:
-    """Persist a mid-flow language change. Returns the new language or None."""
+    """Persist a mid-flow language change. Returns the requested language or None."""
     new_lang = nlu.detect_language_switch(text)
-    if new_lang and new_lang != session.get("language"):
-        session["language"] = new_lang
-        return new_lang
-    return None
+    if not new_lang:
+        return None
+    session["language"] = new_lang
+    return new_lang
+
+
+def _safe_user_reply(reply: str | None) -> str | None:
+    """Drop LLM text that invents a single-language-only limitation."""
+    text = (reply or "").strip()
+    if not text or i18n.claims_single_language_lock(text):
+        return None
+    return text
+
+
+def _continue_after_language_switch(session: dict[str, Any]) -> str:
+    """Acknowledge a language change and re-show the current step."""
+    lang = _lang(session)
+    ack = i18n.t("language_switch_ack", lang)
+    phase = session.get("phase")
+    if phase == "main_menu":
+        body = _main_menu(lang)
+    elif phase == "collect_profile":
+        journey = load_journey(session.get("journey_id"))
+        missing = _missing_slots(journey, session.get("slots") or {})
+        if missing:
+            body = _ask_slot(missing[0], lang)
+        else:
+            session["phase"] = "confirm_profile"
+            body = _profile_summary(session["slots"], session.get("journey_id"), lang)
+    elif phase == "confirm_profile":
+        body = _profile_summary(session.get("slots") or {}, session.get("journey_id"), lang)
+    elif phase == "scheme_list":
+        body = eligibility.format_scheme_list(session.get("matched_schemes") or [])
+    elif phase == "scheme_detail":
+        scheme_sn = session.get("selected_scheme_sn")
+        schemes = session.get("matched_schemes") or []
+        scheme = next((s for s in schemes if str(s.get("SN")) == str(scheme_sn)), None)
+        if scheme:
+            body = eligibility.format_scheme_detail(
+                scheme,
+                back_prompt=_after_detail_prompt(session.get("journey_id"), lang),
+            )
+        else:
+            body = _main_menu(lang)
+    elif phase == "help_crm":
+        body = i18n.t("help_intro", lang)
+    elif phase == "end_menu":
+        body = i18n.t("end_menu", lang)
+    elif phase == "feedback":
+        body = i18n.t("feedback_prompt", lang)
+    else:
+        body = _main_menu(lang)
+    return ack + "\n\n" + body
 
 
 def load_journey(journey_id: str | None = None) -> dict[str, Any]:
@@ -315,15 +365,17 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
         if lang in ("English", "Hindi", "Marathi", "Kannada"):
             session["language"] = lang
             session["phase"] = "main_menu"
-        reply = (data.get("reply") or "").strip()
+        reply = _safe_user_reply(data.get("reply"))
         return reply or None
 
     if phase == "main_menu":
         system = (
             SYSTEM_PERSONA
             + i18n.language_instruction(session.get("language"))
-            +             "\nUser is at main menu. Return JSON: "
+            + "\nUser is at main menu. Return JSON: "
             '{"choice": "Individual Schemes"|"Family Schemes"|"Browse by category"|"I need help"|null, "reply": "..."}. '
+            "If the user is asking to shift/switch/change language to English, Hindi, Marathi, or Kannada, "
+            "that is allowed — do not refuse and do not say you only support one language. "
             "If Individual Schemes, start collecting an individual profile conversationally (ask state first). "
             "If Family Schemes, start collecting a household profile conversationally (ask state first). "
             "If Browse by category, do NOT collect a profile — reply briefly that they can browse by topic. "
@@ -337,7 +389,7 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
         if not data:
             return None
         choice = data.get("choice")
-        reply = (data.get("reply") or "").strip()
+        reply = _safe_user_reply(data.get("reply")) or ""
         if choice == "I need help":
             session["phase"] = "help_crm"
             return reply or (
@@ -358,7 +410,8 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
                 "Great. I’ll ask a few quick questions about you, in plain chat.\n\n"
                 "Which state do you live in?"
             )
-        return reply or "You can say Individual, Family, Browse category, or I need help."
+        # No menu choice. Empty/rejected reply → fall through to templates.
+        return reply or None
 
     if phase == "help_crm":
         system = (
@@ -372,7 +425,7 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
         reply = None
         if data:
             summary = data.get("summary") or text
-            reply = (data.get("reply") or "").strip()
+            reply = _safe_user_reply(data.get("reply"))
         print(f"CRM_TICKET user_issue={summary}", flush=True)
         session["phase"] = "end_menu"
         base = reply or "Thanks — I’ve logged that for the SETU team."
@@ -398,7 +451,7 @@ def _conversational_openers(phase: str, session: dict[str, Any], text: str) -> s
         )
         user = json.dumps(scheme, ensure_ascii=False)[:4000]
         text_out = llm.chat_text(system, user, temperature=0.5)
-        return text_out
+        return _safe_user_reply(text_out)
     return None
 
 
@@ -419,15 +472,24 @@ def handle_message(user_id: str, text: str) -> str:
         reset_session(user_id)
         session = get_session(user_id)
         if llm.llm_configured():
-            warm = llm.chat_text(
-                SYSTEM_PERSONA
-                + "\nUser just said hi. Welcome them to SETU and ask language: English/Hindi/Marathi/Kannada. Plain text only.",
-                text,
-                temperature=0.6,
+            warm = _safe_user_reply(
+                llm.chat_text(
+                    SYSTEM_PERSONA
+                    + "\nUser just said hi. Welcome them to SETU and ask language: English/Hindi/Marathi/Kannada. Plain text only.",
+                    text,
+                    temperature=0.6,
+                )
             )
             if warm:
                 return warm
         return _welcome()
+
+    # Language-switch-only: stay on the current step in the new language.
+    # Never send these turns to the LLM — it may invent a Hindi-only refusal.
+    if phase not in ("welcome_language", "cat_language") and nlu.is_language_switch_only(text):
+        if session.get("path") == "category" or session.get("journey_id") == "schemes_by_category_v1":
+            return category_path.replay_after_language_switch(session)
+        return _continue_after_language_switch(session)
 
     # Isolated category path — Journey 1 / Journey 2 handlers never see these sessions.
     if session.get("path") == "category" or session.get("journey_id") == "schemes_by_category_v1":
@@ -440,7 +502,7 @@ def handle_message(user_id: str, text: str) -> str:
         convo = _conversational_openers(phase, session, text)
         if convo:
             return convo
-        lang = nlu.detect_language(text)
+        lang = nlu.detect_language(text) or nlu.detect_language_switch(text)
         if not lang:
             return (
                 "I support English, Hindi, Marathi, and Kannada for now. "
@@ -568,7 +630,7 @@ def handle_message(user_id: str, text: str) -> str:
                 json.dumps({"slots": session["slots"], "count": len(matched)}, ensure_ascii=False),
                 temperature=0.5,
             )
-            if intro:
+            if intro and not i18n.claims_single_language_lock(intro):
                 return intro + "\n\n" + listing
         return listing
 
@@ -591,8 +653,8 @@ def handle_message(user_id: str, text: str) -> str:
                 idx = data["index"] - 1
                 if 0 <= idx < len(schemes):
                     chosen = schemes[idx]
-            elif data and data.get("reply") and not chosen:
-                return str(data["reply"]).strip()
+            elif data and _safe_user_reply(data.get("reply")) and not chosen:
+                return _safe_user_reply(data.get("reply"))
         if not chosen:
             if "edit" in low:
                 session["phase"] = "confirm_profile"
@@ -645,17 +707,19 @@ def handle_message(user_id: str, text: str) -> str:
                 None,
             )
             if scheme:
-                ans = llm.chat_text(
-                    SYSTEM_PERSONA
-                    + i18n.language_instruction(session.get("language"))
-                    + "\nAnswer the user's question using only the scheme JSON. If unknown, say to check the official link. Plain text. "
-                    + (
-                        "Offer *I need help* or *Go Back*."
-                        if session.get("journey_id") == "journey_2"
-                        else "Offer help or other schemes."
-                    ),
-                    json.dumps({"scheme": scheme, "question": text}, ensure_ascii=False)[:5000],
-                    temperature=0.4,
+                ans = _safe_user_reply(
+                    llm.chat_text(
+                        SYSTEM_PERSONA
+                        + i18n.language_instruction(session.get("language"))
+                        + "\nAnswer the user's question using only the scheme JSON. If unknown, say to check the official link. Plain text. "
+                        + (
+                            "Offer *I need help* or *Go Back*."
+                            if session.get("journey_id") == "journey_2"
+                            else "Offer help or other schemes."
+                        ),
+                        json.dumps({"scheme": scheme, "question": text}, ensure_ascii=False)[:5000],
+                        temperature=0.4,
+                    )
                 )
                 if ans:
                     return ans

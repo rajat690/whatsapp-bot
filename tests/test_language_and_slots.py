@@ -42,6 +42,31 @@ class DetectLanguageSwitchTests(unittest.TestCase):
         self.assertIsNone(nlu.detect_language_switch("20"))
         self.assertIsNone(nlu.detect_language_switch("farmer"))
 
+    def test_shift_to_kannada_and_similar_phrases(self):
+        self.assertEqual(nlu.detect_language_switch("shift to kannada"), "Kannada")
+        self.assertEqual(nlu.detect_language_switch("shift to Kannada"), "Kannada")
+        self.assertEqual(nlu.detect_language_switch("change to Kannada"), "Kannada")
+        self.assertEqual(nlu.detect_language_switch("switch to marathi"), "Marathi")
+        self.assertEqual(nlu.detect_language_switch("switch to english"), "English")
+        self.assertEqual(nlu.detect_language_switch("switch to hindi"), "Hindi")
+        self.assertEqual(nlu.detect_language_switch("ಕನ್ನಡ"), "Kannada")
+        self.assertEqual(nlu.detect_language_switch("कन्नड़"), "Kannada")
+        self.assertTrue(nlu.is_language_switch_only("shift to kannada"))
+        self.assertTrue(nlu.is_language_switch_only("change to Kannada"))
+        self.assertTrue(nlu.is_language_switch_only("ಕನ್ನಡ"))
+        self.assertFalse(
+            nlu.is_language_switch_only("can you switch back to english. i stay in karnataka")
+        )
+
+
+class LanguageLockGuardTests(unittest.TestCase):
+    def test_live_hindi_only_refusal_is_rejected(self):
+        live = "माफ़ कीजिए, मैं अभी हिन्दी में ही सहायता कर सकता हूँ।"
+        self.assertTrue(i18n.claims_single_language_lock(live))
+        self.assertTrue(i18n.claims_single_language_lock("Sorry, I can only help in Hindi right now."))
+        self.assertFalse(i18n.claims_single_language_lock("Sure, let's continue in Kannada."))
+        self.assertFalse(i18n.claims_single_language_lock("ये योजनाएँ काम आ सकती हैं"))
+
 
 class MultiSlotGuardTests(unittest.TestCase):
     def test_journey1_hindi_form_dump(self):
@@ -175,6 +200,44 @@ class KeywordJourneyTests(unittest.TestCase):
         self.assertEqual(get_session(uid)["language"], "English")
         self.assertIn("children", reply.lower())
         self.assertNotRegex(reply, r"[\u0900-\u097F]")
+
+    def test_shift_to_kannada_from_hindi_main_menu(self):
+        uid = "kw-shift-kn"
+        reset_session(uid)
+        handle_message(uid, "hi")
+        handle_message(uid, "Hindi")
+        self.assertEqual(get_session(uid)["phase"], "main_menu")
+        self.assertEqual(get_session(uid)["language"], "Hindi")
+        reply = handle_message(uid, "shift to kannada")
+        session = get_session(uid)
+        self.assertEqual(session["language"], "Kannada")
+        self.assertEqual(session["phase"], "main_menu")
+        self.assertNotIn("हिन्दी में ही", reply)
+        self.assertNotIn("only help in Hindi", reply.lower())
+        self.assertNotIn("only speak", reply.lower())
+        self.assertRegex(reply, r"[\u0C80-\u0CFF]")
+        self.assertIn("1.", reply)
+        reply = handle_message(uid, "1")
+        self.assertEqual(get_session(uid)["journey_id"], "journey_1")
+        self.assertEqual(get_session(uid)["phase"], "collect_profile")
+        self.assertEqual(get_session(uid)["language"], "Kannada")
+
+    def test_switch_languages_from_main_menu(self):
+        uid = "kw-switch-menu"
+        reset_session(uid)
+        handle_message(uid, "hi")
+        handle_message(uid, "English")
+        reply = handle_message(uid, "switch to marathi")
+        self.assertEqual(get_session(uid)["language"], "Marathi")
+        self.assertRegex(reply, r"[\u0900-\u097F]")
+        reply = handle_message(uid, "switch to hindi")
+        self.assertEqual(get_session(uid)["language"], "Hindi")
+        self.assertIn("व्यक्तिगत", reply)
+        reply = handle_message(uid, "switch to english")
+        self.assertEqual(get_session(uid)["language"], "English")
+        self.assertIn("Individual", reply)
+        self.assertIn("continue in English", reply)
+        self.assertNotIn("हिन्दी में ही", reply)
 
     def test_hard_branches_still_work(self):
         uid = "kw-branch"
@@ -404,6 +467,71 @@ class LlmRegressionTests(unittest.TestCase):
             self.assertEqual(reply, natural)
             self.assertNotIn("How many children under 18 are in the household?", reply)
             self.assertEqual(get_session(uid)["slots"].get("household_size"), "5")
+
+    def test_shift_to_kannada_from_hindi_menu_skips_llm_hindi_only_refusal(self):
+        uid = "llm-shift-kn"
+        reset_session(uid)
+        hindi_menu = (
+            "आज आप क्या देखना चाहेंगे?\n1. व्यक्तिगत\n2. परिवार\n3. श्रेणी से खोजें"
+        )
+        replies = iter(
+            [
+                {"language": "Hindi", "reply": hindi_menu},
+            ]
+        )
+
+        def fake_json(_system, _user, temperature=0.3):
+            try:
+                return next(replies)
+            except StopIteration:
+                raise AssertionError("shift to kannada must not be sent to the LLM")
+
+        with (
+            patch("setu.llm.llm_configured", return_value=True),
+            patch("setu.orchestrator.llm.llm_configured", return_value=True),
+            patch("setu.llm.chat_json", side_effect=fake_json),
+            patch("setu.orchestrator.llm.chat_json", side_effect=fake_json),
+        ):
+            handle_message(uid, "hindi")
+            reply = handle_message(uid, "shift to kannada")
+            self.assertEqual(get_session(uid)["language"], "Kannada")
+            self.assertEqual(get_session(uid)["phase"], "main_menu")
+            self.assertNotIn("हिन्दी में ही", reply)
+            self.assertNotIn("only help in Hindi", reply.lower())
+            self.assertRegex(reply, r"[\u0C80-\u0CFF]")
+            self.assertIn("1.", reply)
+
+    def test_llm_hindi_only_refusal_is_not_shown_at_main_menu(self):
+        uid = "llm-lock-drop"
+        reset_session(uid)
+        replies = iter(
+            [
+                {
+                    "language": "Hindi",
+                    "reply": "आज आप क्या देखना चाहेंगे?\n1. व्यक्तिगत\n2. परिवार",
+                },
+                {
+                    "choice": None,
+                    "reply": "माफ़ कीजिए, मैं अभी हिन्दी में ही सहायता कर सकता हूँ।",
+                },
+            ]
+        )
+
+        def fake_json(_system, _user, temperature=0.3):
+            return next(replies)
+
+        with (
+            patch("setu.llm.llm_configured", return_value=True),
+            patch("setu.orchestrator.llm.llm_configured", return_value=True),
+            patch("setu.llm.chat_json", side_effect=fake_json),
+            patch("setu.orchestrator.llm.chat_json", side_effect=fake_json),
+        ):
+            handle_message(uid, "hindi")
+            reply = handle_message(uid, "something unclear")
+            self.assertNotIn("हिन्दी में ही", reply)
+            self.assertNotIn("only help in Hindi", reply.lower())
+            self.assertEqual(get_session(uid)["language"], "Hindi")
+            self.assertEqual(get_session(uid)["phase"], "main_menu")
 
 
 if __name__ == "__main__":

@@ -206,6 +206,45 @@ class CategoryWalkTests(unittest.TestCase):
         self.assertIsNone(session.get("journey_id"))
         self.assertIn("3.", reply)
 
+    def test_shift_to_kannada_from_hindi_menu_after_category(self):
+        uid = "cat-shift-kn"
+        _walk_to_menu(uid, "Hindi")
+        handle_message(uid, "3")
+        handle_message(uid, "2")  # Hindi
+        handle_message(uid, "2")  # Karnataka
+        handle_message(uid, "1")  # education
+        for _ in range(3):
+            handle_message(uid, "1")
+        self.assertEqual(get_session(uid)["phase"], "cat_results")
+        self.assertEqual(get_session(uid)["language"], "Hindi")
+        handle_message(uid, "main menu")
+        self.assertEqual(get_session(uid)["phase"], "main_menu")
+        reply = handle_message(uid, "shift to kannada")
+        session = get_session(uid)
+        self.assertEqual(session["language"], "Kannada")
+        self.assertEqual(session["phase"], "main_menu")
+        self.assertIsNone(session.get("path"))
+        self.assertNotIn("हिन्दी में ही", reply)
+        self.assertRegex(reply, r"[\u0C80-\u0CFF]")
+        self.assertIn("1.", reply)
+
+    def test_shift_to_kannada_on_category_hub(self):
+        uid = "cat-hub-shift"
+        _walk_to_menu(uid, "Hindi")
+        handle_message(uid, "3")
+        handle_message(uid, "2")
+        handle_message(uid, "2")
+        self.assertEqual(get_session(uid)["phase"], "cat_hub")
+        reply = handle_message(uid, "shift to kannada")
+        self.assertEqual(get_session(uid)["language"], "Kannada")
+        self.assertEqual(get_session(uid)["phase"], "cat_hub")
+        self.assertNotIn("हिन्दी में ही", reply)
+        self.assertRegex(reply, r"[\u0C80-\u0CFF]")
+        self.assertIn("1.", reply)
+        reply = handle_message(uid, "1")
+        self.assertEqual(get_session(uid)["category_id"], "education")
+        self.assertEqual(get_session(uid)["language"], "Kannada")
+
 
 class ExistingJourneyNumberingTests(unittest.TestCase):
     def test_journey1_results_are_numbered_not_bullets(self):
