@@ -78,6 +78,16 @@ _GENERIC_QUERIES = {
     "menu",
     "individual",
     "family",
+    "bye",
+    "tata",
+    "ciao",
+    "ola",
+    "goodbye",
+    "end",
+    "stop",
+    "exit",
+    "quit",
+    "later",
     "हिंदी",
     "हिन्दी",
     "मराठी",
@@ -354,7 +364,7 @@ def _useful(value: Any) -> str:
 
 def format_named_scheme_detail(
     scheme: dict[str, Any],
-    next_prompt: str,
+    next_prompt: str | None = None,
     language: str | None = None,
 ) -> str:
     """Numbered library card — name, about, eligibility, link. No invented facts."""
@@ -400,19 +410,11 @@ def format_named_scheme_list(
     footer: str,
     language: str | None = None,
 ) -> str:
+    from . import eligibility
+
     lang = i18n.normalize_language(language)
-    benefits = [_useful(s.get("Benefit")) for s in schemes]
-    localized = translate.translate_many(benefits, lang)
     lines = [intro, ""]
-    for i, scheme in enumerate(schemes, 1):
-        name = scheme.get("Scheme Name") or "Scheme"
-        lib = i18n.library_label(scheme.get("_library"), lang)
-        tag = f" ({lib})" if lib else ""
-        about = localized[i - 1]
-        row = f"{i}. {name}{tag}"
-        if about:
-            row += f" — {about}"
-        lines.append(row)
+    lines.extend(eligibility.numbered_scheme_lines(schemes, lang))
     if footer:
         lines.append("")
         lines.append(footer)

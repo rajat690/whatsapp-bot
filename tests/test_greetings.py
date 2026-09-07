@@ -15,8 +15,8 @@ class GreetingDetectorTests(unittest.TestCase):
             "hi",
             "hello",
             "hey",
-            "hiii",
-            "helo",
+            "hiya",
+            "hii",
             "radhe radhe",
             "namaskar",
             "नमस्ते",
@@ -73,7 +73,7 @@ class GreetingActivationTests(unittest.TestCase):
         self.assertEqual(session["slots"].get("state"), "Karnataka")
         self.assertNotIn("which language", reply.lower())
 
-    def test_hello_mid_collect_goes_to_main_menu(self):
+    def test_hello_mid_collect_restarts_workflow(self):
         uid = "greet-mid"
         reset_session(uid)
         handle_message(uid, "English")
@@ -82,12 +82,15 @@ class GreetingActivationTests(unittest.TestCase):
         from tests.helpers import accept_consent
 
         accept_consent(uid)
+        self.assertEqual(get_session(uid)["phase"], "collect_profile")
         reply = handle_message(uid, "hello")
         session = get_session(uid)
-        self.assertEqual(session["phase"], "main_menu")
-        self.assertEqual(session["language"], "English")
-        self.assertIn("individual", reply.lower())
+        self.assertEqual(session["phase"], "welcome_language")
+        self.assertIsNone(session.get("language"))
+        self.assertFalse(session.get("slots"))
+        self.assertIn("language", reply.lower())
         self.assertNotIn("which age group", reply.lower())
+        self.assertNotIn("individual schemes", reply.lower())
 
 
 if __name__ == "__main__":

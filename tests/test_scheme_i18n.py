@@ -99,8 +99,9 @@ class FormatterChromeTests(unittest.TestCase):
         self.assertIn("या योजना उपयुक्त ठरू शकतात", listing)
         self.assertIn("क्रमांक किंवा योजनेचे नाव लिहा", listing)
         self.assertIn("Sukanya Samriddhi Yojana", listing)
-        self.assertIn("High-interest small savings account", listing)
-        self.assertRegex(listing, r"(?m)^1\. ")
+        self.assertNotIn("High-interest small savings account", listing)
+        self.assertNotIn(" — ", listing.split("Sukanya")[1].split("\n")[0] if "Sukanya" in listing else "")
+        self.assertRegex(listing, r"(?m)^1\. Sukanya Samriddhi Yojana \[केंद्र\]$")
         self.assertNotIn("These schemes may be relevant", listing)
         self.assertNotIn("Matching Central + Karnataka", listing)
 
@@ -187,8 +188,9 @@ class LlmTranslationTests(unittest.TestCase):
         ):
             listing = eligibility.format_scheme_list([scheme], language="Marathi")
             detail = eligibility.format_scheme_detail(scheme, language="Marathi")
-        self.assertIn("मराठी:High-interest small", listing)
+        self.assertNotIn("मराठी:High-interest small", listing)
         self.assertIn("Sukanya Samriddhi Yojana", listing)
+        self.assertRegex(listing, r"(?m)^1\. Sukanya Samriddhi Yojana \[केंद्र\]$")
         self.assertIn("मराठी:High-interest small", detail)
         self.assertIn("लाभ:", detail)
         self.assertRegex(listing, r"(?m)^1\. ")

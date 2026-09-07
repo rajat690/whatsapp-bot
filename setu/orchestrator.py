@@ -115,7 +115,6 @@ def _continue_after_language_switch(session: dict[str, Any]) -> str:
         if scheme:
             body = eligibility.format_scheme_detail(
                 scheme,
-                back_prompt=_after_detail_prompt(session.get("journey_id"), lang),
                 language=lang,
             )
         else:
@@ -125,11 +124,10 @@ def _continue_after_language_switch(session: dict[str, Any]) -> str:
         schemes = session.get("matched_schemes") or []
         scheme = next((s for s in schemes if str(s.get("SN")) == str(scheme_sn)), None)
         if scheme:
-            body = lookup.format_named_scheme_detail(
-                scheme, _named_next_prompt(session), language=lang
-            )
+            _stash_named_next_options(session)
+            body = lookup.format_named_scheme_detail(scheme, next_prompt="", language=lang)
         else:
-            body = _named_next_prompt(session)
+            body = i18n.t("named_next_intro", lang)
     elif phase == "named_scheme_list":
         body = lookup.format_named_scheme_list(
             session.get("matched_schemes") or [],
@@ -254,6 +252,7 @@ def _named_next_options(session: dict[str, Any] | None, language: str | None = N
     if _category_available():
         options.append(("Browse by category", i18n.t("named_next_category", lang)))
     options.append(("Main Menu", i18n.t("named_next_menu", lang)))
+    options.append(("End Chat", i18n.t("end_opt_end", lang)))
     return options
 
 
@@ -267,15 +266,20 @@ def _named_next_prompt(session: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _stash_named_next_options(session: dict[str, Any]) -> None:
+    options = _named_next_options(session)
+    session["named_next_options"] = [key for key, _label in options]
+
+
 def _present_named_schemes(session: dict[str, Any], hits: list[dict[str, Any]]) -> str:
     lang = _lang(session)
     session["journey_id"] = None
     session["matched_schemes"] = hits
-    next_prompt = _named_next_prompt(session)
+    _stash_named_next_options(session)
     if len(hits) == 1:
         session["phase"] = "named_scheme"
         session["selected_scheme_sn"] = hits[0].get("SN")
-        return lookup.format_named_scheme_detail(hits[0], next_prompt, language=lang)
+        return lookup.format_named_scheme_detail(hits[0], next_prompt="", language=lang)
     session["phase"] = "named_scheme_list"
     session["selected_scheme_sn"] = None
     return lookup.format_named_scheme_list(
@@ -329,6 +333,8 @@ def _apply_named_next(session: dict[str, Any], action: str) -> str | None:
         session["selected_scheme_sn"] = None
         session["path"] = None
         return _main_menu(session.get("language"))
+    if action == "End Chat":
+        return _end_chat_reply(session)
     return None
 
 
@@ -343,6 +349,8 @@ def _detect_named_next(session: dict[str, Any], text: str) -> str | None:
         return "resume"
     if nlu.detect_end_choice(text) == "Main Menu" or n in ("main menu", "menu"):
         return "Main Menu"
+    if engine.is_hard_stop(text) or nlu.detect_end_choice(text) == "End Chat":
+        return "End Chat"
     if any(
         p in n
         for p in (
@@ -367,6 +375,8 @@ def _detect_named_next(session: dict[str, Any], text: str) -> str | None:
 
 def _handle_named_scheme_intent(session: dict[str, Any], text: str) -> str | None:
     """Library lookup for named schemes — never invent facts or jump to End Chat."""
+    if engine.is_hard_stop(text) or greetings.is_pure_greeting(text):
+        return None
     phase = session.get("phase") or ""
     if session.get("path") == "category" or session.get("journey_id") == "schemes_by_category_v1":
         return None
@@ -573,18 +583,23 @@ def _with_resume_hint(session: dict[str, Any], reply: str) -> str:
 
 
 def _apply_greeting(session: dict[str, Any]) -> str:
-    engine.ensure_fields(session)
-    lang = session.get("language")
-    phase = session.get("phase") or ""
-    if engine.is_in_collect(session) or phase in ("help_crm", "scheme_list", "scheme_detail"):
-        return _go_main_menu(session, greet=True)
-    if not lang or phase == "welcome_language":
-        session["phase"] = "welcome_language"
-        return _welcome()
-    session["path"] = None
+    """Fresh-session activation: language picker, same as a brand-new `hi`."""
+    session["phase"] = "welcome_language"
+    return _welcome()
+
+
+def _end_chat_reply(session: dict[str, Any]) -> str:
+    """Thank-you goodbye + feedback. Never re-show a scheme list."""
+    lang = _lang(session)
+    engine.clear_ephemeral_path(session)
+    session["matched_schemes"] = []
+    session["selected_scheme_sn"] = None
+    session["named_next_options"] = []
+    session["parked"] = None
     session["journey_id"] = None
-    session["phase"] = "main_menu"
-    return i18n.t("greeting_ack", lang) + "\n\n" + _main_menu(lang)
+    session["path"] = None
+    session["phase"] = "feedback"
+    return i18n.t("goodbye_thanks", lang) + "\n\n" + i18n.t("feedback_prompt", lang)
 
 
 def _resume_collect_prompt(session: dict[str, Any]) -> str:
@@ -969,10 +984,8 @@ def _conversational_collect(
         return None
 
     llm_lang = data.get("language")
-    if llm_lang in i18n.SUPPORTED:
+    if llm_lang in i18n.SUPPORTED and not session.get("language"):
         session["language"] = llm_lang
-        if llm_lang != switched_to:
-            switched_to = llm_lang
 
     extracted = engine.extract_turn(session, journey, text)
     extracted.update(_merge_llm_slots(data, allowed))
@@ -1130,9 +1143,7 @@ def _execute_interrupt(session: dict[str, Any], text: str, hit: engine.Interrupt
         session["phase"] = "help_crm"
         return i18n.t("help_intro", lang)
     if hit.kind == "stop":
-        engine.clear_ephemeral_path(session)
-        session["phase"] = "end_menu"
-        return i18n.t("end_menu", lang)
+        return _end_chat_reply(session)
     if hit.kind in ("named_scheme", "category", "shortcut", "wife"):
         engine.park_current(session)
         engine.merge_known_profile(session, session.get("slots") or {})
@@ -1193,17 +1204,17 @@ def _handle_message_inner(user_id: str, text: str) -> str:
     engine.ensure_fields(session)
     phase = session["phase"]
     low = text.lower().strip()
-    switched_to = None
-    if phase != "welcome_language":
-        switched_to = _apply_language_switch(session, text)
 
-    if greetings.is_explicit_restart(text):
+    # Greetings restart the whole workflow before language-switch / list / slots.
+    # ("hi" must not be treated as the Hindi language code.)
+    if greetings.is_explicit_restart(text) or greetings.is_pure_greeting(text):
         reset_session(user_id)
         session = get_session(user_id)
         return _welcome()
 
-    if greetings.is_pure_greeting(text):
-        return _apply_greeting(session)
+    switched_to = None
+    if phase != "welcome_language":
+        switched_to = _apply_language_switch(session, text)
 
     # Language-switch-only: stay on the current step in the new language.
     # Never send these turns to the LLM — it may invent a Hindi-only refusal.
@@ -1217,6 +1228,12 @@ def _handle_message_inner(user_id: str, text: str) -> str:
     if engine.is_resume_request(text) and session.get("parked"):
         if engine.restore_parked(session):
             return _resume_collect_prompt(session)
+
+    hard = engine.detect_hard_interrupt(session, text)
+    if hard:
+        executed = _execute_interrupt(session, text, hard)
+        if executed is not None:
+            return executed
 
     if phase in engine.INTERRUPTIBLE_PHASES:
         hit = engine.detect_interrupt(session, text)
@@ -1404,11 +1421,14 @@ def _handle_message_inner(user_id: str, text: str) -> str:
             intro = llm.chat_text(
                 SYSTEM_PERSONA
                 + i18n.language_instruction(session.get("language"))
-                + "\nWrite a short warm intro (1-2 sentences) before a scheme list. Plain text. No bullet list.",
+                + "\nWrite a short warm intro (1-2 sentences) before a scheme list. "
+                "Plain text. Do not list, number, or name any schemes.",
                 json.dumps({"slots": session["slots"], "count": len(matched)}, ensure_ascii=False),
                 temperature=0.5,
             )
-            if intro and not i18n.claims_single_language_lock(intro):
+            if intro and not i18n.claims_single_language_lock(intro) and not re.search(
+                r"(?m)^\d+\.\s", intro
+            ):
                 return intro + "\n\n" + listing
         return listing
 
@@ -1451,9 +1471,6 @@ def _handle_message_inner(user_id: str, text: str) -> str:
             return convo
         return eligibility.format_scheme_detail(
             chosen,
-            back_prompt=_after_detail_prompt(
-                session.get("journey_id"), session.get("language")
-            ),
             language=session.get("language"),
         )
 
@@ -1477,9 +1494,6 @@ def _handle_message_inner(user_id: str, text: str) -> str:
                 return convo
             return eligibility.format_scheme_detail(
                 chosen,
-                back_prompt=_after_detail_prompt(
-                    session.get("journey_id"), session.get("language")
-                ),
                 language=session.get("language"),
             )
         # free-text question about scheme

@@ -123,7 +123,6 @@ def current_prompt(session: dict[str, Any]) -> str:
         if scheme:
             return eligibility.format_scheme_detail(
                 scheme,
-                back_prompt=i18n.t("cat_after_detail", lang),
                 language=lang,
             )
         return i18n.t("cat_after_detail", lang)
@@ -527,7 +526,6 @@ def _on_results(session: dict[str, Any], text: str) -> str:
     session["phase"] = "cat_detail"
     return eligibility.format_scheme_detail(
         chosen,
-        back_prompt=i18n.t("cat_after_detail", session.get("language")),
         language=session.get("language"),
     )
 
@@ -556,7 +554,6 @@ def _on_detail(session: dict[str, Any], text: str) -> str:
         session["selected_scheme_sn"] = chosen.get("SN")
         return eligibility.format_scheme_detail(
             chosen,
-            back_prompt=i18n.t("cat_after_detail", session.get("language")),
             language=session.get("language"),
         )
     return i18n.t("cat_after_detail", session.get("language"))

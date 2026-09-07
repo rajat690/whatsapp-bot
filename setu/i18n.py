@@ -455,6 +455,12 @@ _STRINGS: dict[str, dict[str, str]] = {
         "Marathi": "\u0924\u0941\u092e\u094d\u0939\u093e\u0932\u093e *Main Menu* \u0939\u0935\u0947 \u0906\u0939\u0947 \u0915\u0940 *End Chat*?",
         "Kannada": "\u0ca8\u0c80\u0cb5\u0cc1 *Main Menu* \u0c97\u0cc6 \u0cb9\u0ccb\u0c97\u0cb2\u0cc1 \u0cac\u0caf\u0cb8\u0cc1\u0cb5\u0cbf\u0cb0\u0cbe \u0c85\u0ca5\u0cb5\u0cbe *End Chat*?",
     },
+    "goodbye_thanks": {
+        "English": "Thank you for chatting with SETU. Take care!",
+        "Hindi": "SETU से बात करने के लिए धन्यवाद। ध्यान रखना!",
+        "Marathi": "SETU शी बोलल्याबद्दल धन्यवाद. शुभेच्छा!",
+        "Kannada": "SETU ಜೊತೆ ಮಾತನಾಡಿದ್ದಕ್ಕೆ ಧನ್ಯವಾದಗಳು. ವಿದಾಯ!",
+    },
     "choose_end": {
         "English": "Please choose *Main Menu* or *End Chat*.",
         "Hindi": "\u0915\u0943\u092a\u092f\u093e *Main Menu* \u092f\u093e *End Chat* \u091a\u0941\u0928\u0947\u0902\u0964",

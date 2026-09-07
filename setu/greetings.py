@@ -22,6 +22,7 @@ _PHRASES: tuple[str, ...] = (
     "good afternoon",
     "good evening",
     "hey there",
+    "hiya",
     "radhe radhe",
     "ram ram",
     "subh prabhat",

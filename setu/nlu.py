@@ -229,6 +229,144 @@ def _norm(text: str) -> str:
     return text
 
 
+# Standalone farewells (after fold + collapsing repeated words). Not namaste/namaskar.
+_FAREWELL_PHRASES = frozenset(
+    {
+        "bye",
+        "byebye",
+        "goodbye",
+        "good bye",
+        "goodnight",
+        "good night",
+        "gn",
+        "tata",
+        "ciao",
+        "ola",
+        "see you",
+        "see ya",
+        "cya",
+        "later",
+        "ttyl",
+        "take care",
+        "tc",
+        "exit",
+        "quit",
+        "stop",
+        "end",
+        "end chat",
+        "endchat",
+        "close",
+        "dhanyavad",
+        "dhanyawaad",
+        "dhanyavaad",
+        "dhanyavaada",
+        "shukriya",
+        "shukriyaa",
+        "abhari",
+        "alvida",
+        "fir milenge",
+        "phir milenge",
+        "fir milte hain",
+        "phir milte hain",
+        "milte hain",
+        "milte hai",
+        "nirop",
+        "fir bhetu",
+        "phir bhetu",
+        "vidaya",
+        "hogona",
+        "धन्यवाद",
+        "शुक्रिया",
+        "आभारी",
+        "अलविदा",
+        "फिर मिलेंगे",
+        "मिलते हैं",
+        "मिलते है",
+        "निरोप",
+        "फिर भेटू",
+        "फिर भेटूया",
+        "ಧನ್ಯವಾದ",
+        "ವಿದಾಯ",
+        "ಹೋಗೋಣ",
+    }
+)
+
+_FAREWELL_SINGLE = frozenset(
+    {
+        "bye",
+        "byebye",
+        "goodbye",
+        "goodnight",
+        "gn",
+        "tata",
+        "ciao",
+        "ola",
+        "cya",
+        "later",
+        "ttyl",
+        "tc",
+        "exit",
+        "quit",
+        "stop",
+        "end",
+        "endchat",
+        "close",
+        "dhanyavad",
+        "dhanyawaad",
+        "dhanyavaad",
+        "dhanyavaada",
+        "shukriya",
+        "shukriyaa",
+        "abhari",
+        "alvida",
+        "nirop",
+        "vidaya",
+        "hogona",
+        "धन्यवाद",
+        "शुक्रिया",
+        "आभारी",
+        "अलविदा",
+        "निरोप",
+        "ಧನ್ಯವಾದ",
+        "ವಿದಾಯ",
+        "ಹೋಗೋಣ",
+    }
+)
+
+_FAREWELL_EMOJI = re.compile(r"[\u200d\ufe0f\U0001F300-\U0001FAFF\u2600-\u27BF]+")
+
+
+def farewell_key(text: str) -> str:
+    """Fold punctuation, emoji, hyphens, and repeated words for farewell matching."""
+    t = (text or "").strip().lower()
+    t = _FAREWELL_EMOJI.sub(" ", t)
+    t = t.replace("₹", "")
+    t = re.sub(r"[-_/]+", " ", t)
+    t = re.sub(r"[!.,?~|;:।'\"“”‘’()]+", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    words = t.split()
+    collapsed: list[str] = []
+    for w in words:
+        if not collapsed or collapsed[-1] != w:
+            collapsed.append(w)
+    return " ".join(collapsed)
+
+
+def is_farewell(text: str) -> bool:
+    """True for a short End Chat utterance (bye / tata / dhanyavad / …), not namaste."""
+    key = farewell_key(text)
+    if not key:
+        return False
+    if key in _FAREWELL_PHRASES:
+        return True
+    if re.search(r"\bend\s+chat\b", key):
+        return True
+    words = key.split()
+    if not words or len(words) > 4:
+        return False
+    return all(w in _FAREWELL_SINGLE for w in words)
+
+
 def _contains_phrase(haystack: str, needle: str) -> bool:
     return re.search(rf"(?<!\w){re.escape(needle)}(?!\w)", haystack) is not None
 
@@ -446,6 +584,7 @@ def detect_state(text: str) -> str | None:
         "bengaluru": "Karnataka",
         "bangalore": "Karnataka",
         "maharashtra": "Maharashtra",
+        "maharastra": "Maharashtra",
         "mumbai": "Maharashtra",
         "delhi": "Delhi",
         "tamil nadu": "Tamil Nadu",
@@ -939,7 +1078,7 @@ def detect_end_choice(text: str) -> str | None:
     n = _norm(text)
     if "main menu" in n or n in ("menu", "start over", "restart"):
         return "Main Menu"
-    if "end" in n or n in ("bye", "goodbye", "exit", "stop"):
+    if is_farewell(text):
         return "End Chat"
     return None
 

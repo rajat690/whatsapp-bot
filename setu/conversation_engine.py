@@ -53,11 +53,28 @@ INTERRUPTIBLE_PHASES = frozenset(
         "collect_profile",
         "confirm_profile",
         "consent",
+        "consent_declined",
         "help_crm",
         "scheme_list",
         "scheme_detail",
+        "named_scheme",
+        "named_scheme_list",
+        "named_scheme_ask",
+        "who_first",
+        "who_clarify",
+        "cat_language",
+        "cat_state_scope",
+        "cat_state_plus",
+        "cat_hub",
+        "cat_who",
+        "cat_collect",
+        "cat_results",
+        "cat_detail",
     }
 )
+
+# End-menu / feedback own their End Chat → rating flow.
+_SKIP_HARD_INTERRUPT_PHASES = frozenset({"end_menu", "feedback", "referral"})
 
 COLLECT_PHASES = frozenset({"collect_profile", "confirm_profile", "consent"})
 
@@ -425,18 +442,39 @@ def _slot_answer_not_interrupt(session: dict[str, Any], text: str) -> bool:
     return False
 
 
-def detect_interrupt(session: dict[str, Any], text: str) -> Interrupt | None:
-    """Hard interrupts that must win before LLM collect. None = continue the slot."""
+def is_hard_stop(text: str) -> bool:
+    """End Chat / farewells — exact-ish, not a random substring like 'independent'."""
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    if nlu.is_farewell(raw):
+        return True
+    from . import i18n
+
+    n = nlu.farewell_key(raw)
+    for lang in i18n.SUPPORTED:
+        if n == nlu.farewell_key(i18n.t("end_opt_end", lang)):
+            return True
+    return False
+
+
+def detect_hard_interrupt(session: dict[str, Any], text: str) -> Interrupt | None:
+    """End Chat / Main Menu / help — always win, including named-scheme list/detail."""
     raw = (text or "").strip()
     if not raw:
         return None
     phase = session.get("phase") or ""
+    if phase in _SKIP_HARD_INTERRUPT_PHASES:
+        return None
     n = nlu._norm(raw)
 
-    if is_resume_request(raw) and session.get("parked"):
-        return Interrupt("resume")
-
     from . import consent as consent_mod
+
+    # Farewells beat slot/list/number parsing (ola must not become a scheme lookup).
+    if is_hard_stop(raw):
+        if phase == "consent" and consent_mod.detect(raw) in ("Accept", "Decline"):
+            return None
+        return Interrupt("stop")
 
     if phase == "consent" and consent_mod.detect(raw) in ("Accept", "Decline"):
         return None
@@ -449,11 +487,36 @@ def detect_interrupt(session: dict[str, Any], text: str) -> Interrupt | None:
         if n not in ("1", "2", "3", "4"):
             return Interrupt("main_menu")
 
-    if n in ("stop", "end chat", "end", "bye", "goodbye", "exit"):
-        return Interrupt("stop")
-
     if nlu.is_plain_menu_choice(raw) and nlu.detect_menu(raw) == "I need help":
-        return Interrupt("help")
+        if n not in ("1", "2", "3", "4"):
+            return Interrupt("help")
+
+    return None
+
+
+def detect_interrupt(session: dict[str, Any], text: str) -> Interrupt | None:
+    """Hard interrupts that must win before LLM collect. None = continue the slot."""
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    phase = session.get("phase") or ""
+    n = nlu._norm(raw)
+
+    if is_resume_request(raw) and session.get("parked"):
+        return Interrupt("resume")
+
+    hard = detect_hard_interrupt(session, raw)
+    if hard:
+        return hard
+
+    from . import consent as consent_mod
+
+    if phase == "consent" and consent_mod.detect(raw) in ("Accept", "Decline"):
+        return None
+    if phase == "confirm_profile" and nlu.detect_confirm(raw):
+        return None
+    if _slot_answer_not_interrupt(session, raw):
+        return None
 
     if _WIFE_SCHEMES.search(raw) and profile_intent.word_count(raw) <= 16:
         return Interrupt("wife")
