@@ -228,7 +228,15 @@ SCHEME_LIST_PHASES = frozenset({"scheme_list", "cat_results", "named_scheme_list
 
 
 def _collect_slot_id(session: dict[str, Any]) -> str | None:
-    if (session.get("phase") or "") != "collect_profile":
+    phase = session.get("phase") or ""
+    if phase == "cat_collect":
+        category_id = session.get("category_id") or ""
+        questions = cat.questions_for(category_id, session.get("slots"))
+        idx = session.get("cat_q_index") or 0
+        if 0 <= idx < len(questions):
+            return str(questions[idx].get("id") or "") or None
+        return None
+    if phase != "collect_profile":
         return None
     if not session.get("journey_id"):
         return session.get("collect_slot_id")
@@ -241,8 +249,20 @@ def _collect_slot_id(session: dict[str, Any]) -> str | None:
 def _list_button_label(session: dict[str, Any]) -> str:
     phase = session.get("phase") or ""
     lang = session.get("language")
-    slot_id = _collect_slot_id(session) if phase == "collect_profile" else None
+    slot_id = _collect_slot_id(session) if phase in ("collect_profile", "cat_collect") else None
     return clip(i18n.interactive_list_button(lang, phase=phase, slot_id=slot_id), LIST_BUTTON_MAX)
+
+
+def _section_title(session: dict[str, Any]) -> str:
+    return clip(
+        i18n.interactive_section_title(session.get("language"), phase=session.get("phase") or ""),
+        LIST_ROW_TITLE_MAX,
+    )
+
+
+def matches_current_options(session: dict[str, Any], text: str) -> bool:
+    """True when inbound text/id is a row on the current interactive menu."""
+    return pick_by_number_or_id(text, options_for_session(session)) is not None
 
 
 def scheme_option_rows(
@@ -275,6 +295,8 @@ def finalize(session: dict[str, Any], reply: str | None) -> str:
     list_button = _list_button_label(session)
     option_rows = [{"id": oid, "title": title} for oid, title in options]
 
+    section_title = _section_title(session)
+
     if phase in DETAIL_MENU_PHASES and options:
         menu_prompt = _short_body(session)
         session["outbound"] = {
@@ -284,11 +306,13 @@ def finalize(session: dict[str, Any], reply: str | None) -> str:
             "detail_text": text,
             "menu_options": option_rows,
             "list_button": list_button,
+            "section_title": section_title,
             "followup": {
                 "body": with_numbered_options(menu_prompt, options),
                 "options": option_rows,
                 "list_button": list_button,
                 "short_body": menu_prompt,
+                "section_title": section_title,
             },
         }
         return text
@@ -308,6 +332,7 @@ def finalize(session: dict[str, Any], reply: str | None) -> str:
             "options": option_rows,
             "list_button": list_button,
             "short_body": "",
+            "section_title": section_title,
         }
         return text
 
@@ -318,6 +343,7 @@ def finalize(session: dict[str, Any], reply: str | None) -> str:
         "options": option_rows,
         "list_button": list_button,
         "short_body": _short_body(session),
+        "section_title": section_title,
     }
     return text
 
@@ -335,26 +361,35 @@ def outbound_sends(message_text: str, outbound: dict | None) -> list[dict[str, A
             menu_prompt,
             [(str(o.get("id") or ""), str(o.get("title") or "")) for o in menu_opts],
         )
+        fallback_btn = i18n.t("interactive_choose_option", "English")
         return [
             {
                 "body": detail,
                 "options": [],
-                "list_button": "Choose",
+                "list_button": fallback_btn,
                 "short_body": "",
+                "section_title": "",
             },
             {
                 "body": menu_body,
                 "options": menu_opts,
-                "list_button": follow.get("list_button") or outbound.get("list_button") or "Choose",
+                "list_button": follow.get("list_button")
+                or outbound.get("list_button")
+                or fallback_btn,
                 "short_body": menu_prompt,
+                "section_title": follow.get("section_title")
+                or outbound.get("section_title")
+                or "",
             },
         ]
+    fallback_btn = i18n.t("interactive_choose_option", "English")
     return [
         {
             "body": outbound.get("body") or message_text,
             "options": outbound.get("options") or [],
-            "list_button": outbound.get("list_button") or "Choose",
+            "list_button": outbound.get("list_button") or fallback_btn,
             "short_body": outbound.get("short_body") or "",
+            "section_title": outbound.get("section_title") or "",
         }
     ]
 
@@ -363,7 +398,26 @@ def _default_what_next() -> str:
     return i18n.t("named_next_intro", "English")
 
 
+def _category_question_short(session: dict[str, Any]) -> str:
+    lang = session.get("language")
+    category_id = session.get("category_id") or ""
+    questions = cat.questions_for(category_id, session.get("slots"))
+    idx = session.get("cat_q_index") or 0
+    if idx >= len(questions):
+        return i18n.t("cat_hub_prompt", lang)
+    q = questions[idx]
+    header = i18n.t(
+        "cat_question_header",
+        lang,
+        category=cat.label_of(category_id, lang),
+        n=str(idx + 1),
+        total=str(len(questions)),
+    )
+    return f"{header}\n\n{cat.label_of(q, lang)}"
+
+
 def _short_body(session: dict[str, Any]) -> str:
+    """Visible WhatsApp interactive body — real prompt copy, never a lone Choose."""
     phase = session.get("phase") or ""
     lang = session.get("language")
     if phase in SCHEME_LIST_PHASES:
@@ -372,14 +426,37 @@ def _short_body(session: dict[str, Any]) -> str:
         return i18n.t("named_next_intro", lang)
     if phase == "consent":
         return i18n.t("consent_body", lang)
+    if phase == "consent_declined":
+        return i18n.t("consent_declined", lang)
     if phase in ("who_first", "who_clarify"):
         return i18n.t("who_clarify" if phase == "who_clarify" else "who_intro", lang)
     if phase == "main_menu":
         return i18n.t("main_menu_header", lang)
-    if phase in LANGUAGE_PHASES or phase == "collect_profile":
-        slot_id = _collect_slot_id(session) if phase == "collect_profile" else None
-        return i18n.interactive_list_button(lang, phase=phase, slot_id=slot_id)
-    return i18n.t("interactive_choose", lang)
+    if phase == "welcome_language":
+        return i18n.t("welcome_language_prompt", lang)
+    if phase == "cat_language":
+        return i18n.t("cat_language_prompt", lang)
+    if phase == "cat_state_scope":
+        return i18n.t("cat_state_prompt", lang)
+    if phase == "cat_state_plus":
+        return i18n.t("cat_state_plus_prompt", lang)
+    if phase == "cat_hub":
+        key = "cat_hub2_prompt" if session.get("hub_screen") == 2 else "cat_hub_prompt"
+        return i18n.t(key, lang)
+    if phase == "cat_who":
+        return i18n.t("cat_who_prompt", lang)
+    if phase == "cat_collect":
+        return _category_question_short(session)
+    if phase == "collect_profile":
+        slot_id = _collect_slot_id(session)
+        if slot_id:
+            return i18n.slot_prompt(slot_id, lang)
+        return i18n.t("interactive_choose_option", lang)
+    if phase == "confirm_profile":
+        return i18n.t("profile_confirm", lang)
+    if phase == "end_menu":
+        return i18n.t("end_menu", lang)
+    return i18n.t("interactive_choose_option", lang)
 
 
 def spec_mode(options: list[dict[str, str]] | list[tuple[str, str]]) -> str:
@@ -409,12 +486,15 @@ def build_interactive_payload(
     body: str,
     options: list[dict[str, str]],
     *,
-    list_button: str = "Choose",
+    list_button: str | None = None,
+    section_title: str | None = None,
 ) -> dict[str, Any] | None:
     mode = spec_mode(options)
     if mode == "text":
         return None
     body = clip(body, INTERACTIVE_BODY_MAX) or " "
+    if i18n.is_bare_choose(body):
+        body = i18n.t("interactive_choose_option", "English")
     if mode == "buttons":
         buttons = []
         for opt in options[:MAX_REPLY_BUTTONS]:
@@ -448,6 +528,12 @@ def build_interactive_payload(
         if desc:
             row["description"] = clip(desc, LIST_ROW_DESC_MAX)
         rows.append(row)
+    button = list_button if list_button and not i18n.is_bare_choose(list_button) else ""
+    if not button:
+        button = i18n.t("interactive_choose_option", "English")
+    heading = section_title if section_title and not i18n.is_bare_choose(section_title) else ""
+    if not heading:
+        heading = i18n.t("interactive_section_options", "English")
     return {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
@@ -457,8 +543,8 @@ def build_interactive_payload(
             "type": "list",
             "body": {"text": body},
             "action": {
-                "button": clip(list_button or "Choose", LIST_BUTTON_MAX),
-                "sections": [{"title": "Options", "rows": rows}],
+                "button": clip(button, LIST_BUTTON_MAX),
+                "sections": [{"title": clip(heading, LIST_ROW_TITLE_MAX), "rows": rows}],
             },
         },
     }

@@ -517,6 +517,8 @@ def detect_interrupt(session: dict[str, Any], text: str) -> Interrupt | None:
         return None
     if _slot_answer_not_interrupt(session, raw):
         return None
+    if interactive.matches_current_options(session, raw):
+        return None
 
     if _WIFE_SCHEMES.search(raw) and profile_intent.word_count(raw) <= 16:
         return Interrupt("wife")

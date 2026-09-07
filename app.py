@@ -169,19 +169,21 @@ def send_whatsapp_reply(recipient_phone: str, message_text: str, outbound: dict 
 def _send_one_whatsapp(recipient_phone: str, spec: dict) -> bool:
     options = spec.get("options") or []
     body = spec.get("body") or ""
-    list_button = spec.get("list_button") or "Choose"
+    list_button = spec.get("list_button") or ""
     short_body = spec.get("short_body") or ""
+    section_title = spec.get("section_title") or ""
 
     if options:
         interactive_body = short_body or body
         if not short_body and len(body) > INTERACTIVE_BODY_MAX:
             send_text_message(recipient_phone, body)
-            interactive_body = list_button or "Choose an option:"
+            interactive_body = list_button or "choose option"
         payload = build_interactive_payload(
             recipient_phone,
             interactive_body,
             options,
             list_button=list_button,
+            section_title=section_title,
         )
         if payload and _post_meta(payload):
             print(
