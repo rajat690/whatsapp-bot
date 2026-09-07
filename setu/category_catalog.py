@@ -997,12 +997,27 @@ ANSWER_KEYWORDS: dict[str, dict[str, tuple[str, ...]]] = {
 }
 
 
+def _display(english: str, language: str, packed: dict[str, Any] | None = None) -> str:
+    packed = packed or {}
+    direct = packed.get(language)
+    if direct:
+        return str(direct)
+    if language in ("Marathi", "Kannada"):
+        from .catalog_i18n import overlay_label
+
+        over = overlay_label(english, language)
+        if over:
+            return over
+    return str(packed.get("English") or english)
+
+
 def label_of(item: dict[str, Any] | str, language: str | None, catalog: dict[str, dict[str, str]] | None = None) -> str:
     lang = language if language in ("English", "Hindi", "Marathi", "Kannada") else "English"
     if isinstance(item, str):
         packed = (catalog or HUB_LABELS).get(item) or {}
-        return packed.get(lang) or packed.get("English") or item
-    return item.get(lang) or item.get("English") or item.get("id") or ""
+        return _display(str(packed.get("English") or item), lang, packed)
+    english = str(item.get("English") or item.get("id") or "")
+    return _display(english, lang, item)
 
 
 def questions_for(category_id: str, slots: dict[str, str] | None = None) -> list[dict[str, Any]]:

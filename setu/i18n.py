@@ -269,7 +269,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "English": "Please reply with the scheme number or name from the list.",
         "Hindi": "\u0915\u0943\u092a\u092f\u093e \u0938\u0942\u091a\u0940 \u0938\u0947 \u092f\u094b\u091c\u0928\u093e \u0915\u093e \u0928\u0902\u092c\u0930 \u092f\u093e \u0928\u093e\u092e \u0932\u093f\u0916\u0947\u0902\u0964",
         "Marathi": "\u0915\u0943\u092a\u092f\u093e \u092f\u093e\u0926\u0940\u0924\u0940\u0932 \u092f\u094b\u091c\u0928\u0947\u091a\u093e \u0915\u094d\u0930\u092e\u093e\u0902\u0915 \u0915\u093f\u0902\u0935\u093e \u0928\u093e\u0935 \u0932\u093f\u0939\u093e.",
-        "Kannada": "Please reply with the scheme number or name from the list.",
+        "Kannada": "ದಯವಿಟ್ಟು ಪಟ್ಟಿಯಿಂದ ಯೋಜನೆಯ ಸಂಖ್ಯೆ ಅಥವಾ ಹೆಸರು ಬರೆಯಿರಿ.",
     },
     "feedback_prompt": {
         "English": "Before you go, how would you rate your experience with SETU today? (1\u20135)",
@@ -293,13 +293,13 @@ _STRINGS: dict[str, dict[str, str]] = {
         "English": "Reply *I need help* or *Go Back* to the list.",
         "Hindi": "*I need help* \u092f\u093e \u0938\u0942\u091a\u0940 \u092a\u0930 *Go Back* \u0932\u093f\u0916\u0947\u0902\u0964",
         "Marathi": "*I need help* \u0915\u093f\u0902\u0935\u093e \u092f\u093e\u0926\u0940\u0935\u0930 *Go Back* \u0932\u093f\u0939\u093e.",
-        "Kannada": "Reply *I need help* or *Go Back* to the list.",
+        "Kannada": "*I need help* ಅಥವಾ ಪಟ್ಟಿಗೆ *Go Back* ಬರೆಯಿರಿ.",
     },
     "after_detail_j1": {
         "English": "Reply *help* for support, or *other schemes* to go back to the list.",
         "Hindi": "\u0938\u0939\u093e\u092f\u0924\u093e \u0915\u0947 \u0932\u093f\u090f *help*, \u092f\u093e \u0938\u0942\u091a\u0940 \u0915\u0947 \u0932\u093f\u090f *other schemes* \u0932\u093f\u0916\u0947\u0902\u0964",
         "Marathi": "\u092e\u0926\u0924\u0940\u0938\u093e\u0920\u0940 *help*, \u0915\u093f\u0902\u0935\u093e \u092f\u093e\u0926\u0940\u0938\u093e\u0920\u0940 *other schemes* \u0932\u093f\u0939\u093e.",
-        "Kannada": "Reply *help* for support, or *other schemes* to go back to the list.",
+        "Kannada": "ಸಹಾಯಕ್ಕೆ *help*, ಅಥವಾ ಪಟ್ಟಿಗೆ *other schemes* ಬರೆಯಿರಿ.",
     },
     "continuing_in": {
         "English": "Great \u2014 continuing in {chosen}.",
@@ -310,92 +310,254 @@ _STRINGS: dict[str, dict[str, str]] = {
     "cat_language_prompt": {
         "English": "Browse by category. Which language should we use?",
         "Hindi": "श्रेणी से खोजें। किस भाषा में बात करें?",
-        "Marathi": "Browse by category. Which language should we use?",
-        "Kannada": "Browse by category. Which language should we use?",
+        "Marathi": "श्रेणीनुसार शोधा. कोणती भाषा वापरायची?",
+        "Kannada": "ವರ್ಗದಿಂದ ಹುಡುಕಿ. ಯಾವ ಭಾಷೆ ಬಳಸೋಣ?",
     },
     "cat_language_unclear": {
         "English": "Please pick a language from the list.",
         "Hindi": "कृपया सूची से भाषा चुनें।",
-        "Marathi": "Please pick a language from the list.",
-        "Kannada": "Please pick a language from the list.",
+        "Marathi": "कृपया यादीतून भाषा निवडा.",
+        "Kannada": "ದಯವಿಟ್ಟು ಪಟ್ಟಿಯಿಂದ ಭಾಷೆ ಆಯ್ಕೆಮಾಡಿ.",
     },
     "cat_state_prompt": {
         "English": "Which scheme set should I search?",
         "Hindi": "कौन सी योजनाएँ देखूँ?",
-        "Marathi": "Which scheme set should I search?",
-        "Kannada": "Which scheme set should I search?",
+        "Marathi": "कोणत्या योजना शोधाव्या?",
+        "Kannada": "ಯಾವ ಯೋಜನೆಗಳನ್ನು ಹುಡುಕಲಿ?",
     },
     "cat_state_plus_prompt": {
         "English": "State + Central — which state?",
         "Hindi": "राज्य + केंद्र — कौन सा राज्य?",
-        "Marathi": "State + Central — which state?",
-        "Kannada": "State + Central — which state?",
+        "Marathi": "राज्य + केंद्र — कोणते राज्य?",
+        "Kannada": "ರಾಜ್ಯ + ಕೇಂದ್ರ — ಯಾವ ರಾಜ್ಯ?",
     },
     "cat_hub_prompt": {
         "English": "Pick a topic (1–10). Reply *More* for extra categories.",
         "Hindi": "विषय चुनें (1–10)। और श्रेणियों के लिए *More* लिखें।",
-        "Marathi": "Pick a topic (1–10). Reply *More* for extra categories.",
-        "Kannada": "Pick a topic (1–10). Reply *More* for extra categories.",
+        "Marathi": "विषय निवडा (1–10). अधिक श्रेणींसाठी *More* लिहा.",
+        "Kannada": "ವಿಷಯ ಆಯ್ಕೆಮಾಡಿ (1–10). ಇನ್ನಷ್ಟು ವರ್ಗಗಳಿಗೆ *More* ಬರೆಯಿರಿ.",
     },
     "cat_hub2_prompt": {
         "English": "More topics — pick a number, or *Back*.",
         "Hindi": "और विषय — संख्या चुनें, या *Back*।",
-        "Marathi": "More topics — pick a number, or *Back*.",
-        "Kannada": "More topics — pick a number, or *Back*.",
+        "Marathi": "अधिक विषय — क्रमांक निवडा, किंवा *Back*.",
+        "Kannada": "ಇನ್ನಷ್ಟು ವಿಷಯಗಳು — ಸಂಖ್ಯೆ ಆಯ್ಕೆಮಾಡಿ, ಅಥವಾ *Back*.",
     },
     "cat_who_prompt": {
         "English": "Who is this for? (category path only)",
         "Hindi": "यह किसके लिए है?",
-        "Marathi": "Who is this for?",
-        "Kannada": "Who is this for?",
+        "Marathi": "हे कोणासाठी आहे?",
+        "Kannada": "ಇದು ಯಾರಿಗಾಗಿ?",
     },
     "cat_pick_number": {
         "English": "Please reply with a number from the list.",
         "Hindi": "कृपया सूची में से एक नंबर लिखें।",
-        "Marathi": "Please reply with a number from the list.",
-        "Kannada": "Please reply with a number from the list.",
+        "Marathi": "कृपया यादीतील क्रमांक लिहा.",
+        "Kannada": "ದಯವಿಟ್ಟು ಪಟ್ಟಿಯಿಂದ ಒಂದು ಸಂಖ್ಯೆ ಬರೆಯಿರಿ.",
     },
     "cat_question_header": {
         "English": "{category} — question {n} of {total}",
         "Hindi": "{category} — प्रश्न {n}/{total}",
-        "Marathi": "{category} — question {n} of {total}",
-        "Kannada": "{category} — question {n} of {total}",
+        "Marathi": "{category} — प्रश्न {n}/{total}",
+        "Kannada": "{category} — ಪ್ರಶ್ನೆ {n}/{total}",
     },
     "cat_results_intro": {
         "English": "These schemes may be relevant (final eligibility depends on official verification):",
         "Hindi": "ये योजनाएँ काम आ सकती हैं (अंतिम पात्रता आधिकारिक जाँच पर निर्भर है):",
-        "Marathi": "These schemes may be relevant (final eligibility depends on official verification):",
-        "Kannada": "These schemes may be relevant (final eligibility depends on official verification):",
+        "Marathi": "या योजना उपयुक्त ठरू शकतात (अंतिम पात्रता अधिकृत पडताळणीवर अवलंबून आहे):",
+        "Kannada": "ಈ ಯೋಜನೆಗಳು ಸಹಾಯಕವಾಗಬಹುದು (ಅಂತಿಮ ಅರ್ಹತೆ ಅಧಿಕೃತ ಪರಿಶೀಲನೆಯ ಮೇಲೆ ಅವಲಂಬಿತ):",
     },
     "cat_results_footer": {
         "English": "Reply with a number or scheme name. Or *Back to categories* / *Main menu*.",
         "Hindi": "नंबर या योजना का नाम लिखें। या *Back to categories* / *Main menu*।",
-        "Marathi": "Reply with a number or scheme name. Or *Back to categories* / *Main menu*.",
-        "Kannada": "Reply with a number or scheme name. Or *Back to categories* / *Main menu*.",
+        "Marathi": "क्रमांक किंवा योजनेचे नाव लिहा. किंवा *Back to categories* / *Main menu*.",
+        "Kannada": "ಸಂಖ್ಯೆ ಅಥವಾ ಯೋಜನೆಯ ಹೆಸರು ಬರೆಯಿರಿ. ಅಥವಾ *Back to categories* / *Main menu*.",
     },
     "cat_no_match": {
         "English": "I could not match schemes for this topic with the details given. Try another category, or *Main menu*.",
         "Hindi": "इन विवरणों से इस विषय की योजनाएँ नहीं मिल सकीं। दूसरी श्रेणी आज़माएँ, या *Main menu*।",
-        "Marathi": "I could not match schemes for this topic with the details given. Try another category, or *Main menu*.",
-        "Kannada": "I could not match schemes for this topic with the details given. Try another category, or *Main menu*.",
+        "Marathi": "दिलेल्या माहितीनुसार या विषयाच्या योजना सापडल्या नाहीत. दुसरी श्रेणी वापरून पहा, किंवा *Main menu*.",
+        "Kannada": "ನೀಡಿದ ವಿವರಗಳಿಂದ ಈ ವಿಷಯದ ಯೋಜನೆಗಳು ಸಿಗಲಿಲ್ಲ. ಇನ್ನೊಂದು ವರ್ಗ ಪ್ರಯತ್ನಿಸಿ, ಅಥವಾ *Main menu*.",
     },
     "cat_after_detail": {
         "English": "Reply *Back* for the numbered list, *Back to categories*, *Main menu*, or *help*.",
         "Hindi": "सूची के लिए *Back*, श्रेणियों के लिए *Back to categories*, *Main menu*, या *help* लिखें।",
-        "Marathi": "Reply *Back* for the numbered list, *Back to categories*, *Main menu*, or *help*.",
-        "Kannada": "Reply *Back* for the numbered list, *Back to categories*, *Main menu*, or *help*.",
+        "Marathi": "क्रमांकित यादीसाठी *Back*, श्रेणींसाठी *Back to categories*, *Main menu*, किंवा *help* लिहा.",
+        "Kannada": "ಸಂಖ್ಯೆಯ ಪಟ್ಟಿಗೆ *Back*, ವರ್ಗಗಳಿಗೆ *Back to categories*, *Main menu*, ಅಥವಾ *help* ಬರೆಯಿರಿ.",
     },
     "cat_intent_ack": {
         "English": "Looking at *{category}* schemes.",
         "Hindi": "*{category}* योजनाएँ देख रहे हैं।",
         "Marathi": "*{category}* योजना पाहत आहोत.",
-        "Kannada": "Looking at *{category}* schemes.",
+        "Kannada": "*{category}* ಯೋಜನೆಗಳನ್ನು ನೋಡುತ್ತಿದ್ದೇವೆ.",
     },
     "cat_unknown": {
         "English": "I don't have a topic pack for that yet. You can *3 Browse category*, choose Individual / Family, or type *I need help*.",
         "Hindi": "उस विषय की श्रेणी अभी नहीं है। *3 श्रेणी से खोजें*, व्यक्तिगत / परिवार चुनें, या *I need help* लिखें।",
-        "Marathi": "I don't have a topic pack for that yet. You can *3 Browse category*, choose Individual / Family, or type *I need help*.",
-        "Kannada": "I don't have a topic pack for that yet. You can *3 Browse category*, choose Individual / Family, or type *I need help*.",
+        "Marathi": "त्या विषयाची श्रेणी अद्याप नाही. *3 श्रेणीनुसार शोधा*, Individual / Family निवडा, किंवा *I need help* लिहा.",
+        "Kannada": "ಆ ವಿಷಯದ ವರ್ಗ ಇನ್ನೂ ಇಲ್ಲ. *3 ವರ್ಗದಿಂದ ಹುಡುಕಿ*, Individual / Family ಆಯ್ಕೆಮಾಡಿ, ಅಥವಾ *I need help* ಬರೆಯಿರಿ.",
+    },
+    "scheme_field_category": {
+        "English": "Category",
+        "Hindi": "श्रेणी",
+        "Marathi": "श्रेणी",
+        "Kannada": "ವರ್ಗ",
+    },
+    "scheme_field_benefit": {
+        "English": "Benefit",
+        "Hindi": "लाभ",
+        "Marathi": "लाभ",
+        "Kannada": "ಪ್ರಯೋಜನ",
+    },
+    "scheme_field_age": {
+        "English": "Age",
+        "Hindi": "आयु",
+        "Marathi": "वय",
+        "Kannada": "ವಯಸ್ಸು",
+    },
+    "scheme_field_income": {
+        "English": "Income",
+        "Hindi": "आय",
+        "Marathi": "उत्पन्न",
+        "Kannada": "ಆದಾಯ",
+    },
+    "scheme_field_who": {
+        "English": "Who",
+        "Hindi": "पात्र",
+        "Marathi": "पात्र",
+        "Kannada": "ಯಾರಿಗೆ",
+    },
+    "scheme_field_other": {
+        "English": "Other",
+        "Hindi": "अन्य",
+        "Marathi": "इतर",
+        "Kannada": "ಇತರೆ",
+    },
+    "scheme_field_more_info": {
+        "English": "More info",
+        "Hindi": "अधिक जानकारी",
+        "Marathi": "अधिक माहिती",
+        "Kannada": "ಹೆಚ್ಚಿನ ಮಾಹಿತಿ",
+    },
+    "scheme_guidance": {
+        "English": "This is guidance only — please re-verify on the official site before applying.",
+        "Hindi": "यह केवल मार्गदर्शन है — आवेदन से पहले आधिकारिक साइट पर जाँच लें।",
+        "Marathi": "ही केवळ मार्गदर्शक माहिती आहे — अर्ज करण्यापूर्वी अधिकृत संकेतस्थळावर पडताळा.",
+        "Kannada": "ಇದು ಕೇವಲ ಮಾರ್ಗದರ್ಶನ — ಅರ್ಜಿ ಸಲ್ಲಿಸುವ ಮೊದಲು ಅಧಿಕೃತ ತಾಣದಲ್ಲಿ ಮರುಪರಿಶೀಲಿಸಿ.",
+    },
+    "scheme_list_intro": {
+        "English": "Based on what you shared, these schemes may be relevant (final eligibility depends on official verification):",
+        "Hindi": "आपकी जानकारी के आधार पर ये योजनाएँ काम आ सकती हैं (अंतिम पात्रता आधिकारिक जाँच पर निर्भर है):",
+        "Marathi": "तुम्ही सांगितलेल्या माहितीनुसार या योजना उपयुक्त ठरू शकतात (अंतिम पात्रता अधिकृत पडताळणीवर अवलंबून आहे):",
+        "Kannada": "ನೀವು ಹಂಚಿಕೊಂಡ ಮಾಹಿತಿಯ ಆಧಾರದಲ್ಲಿ ಈ ಯೋಜನೆಗಳು ಸಹಾಯಕವಾಗಬಹುದು (ಅಂತಿಮ ಅರ್ಹತೆ ಅಧಿಕೃತ ಪರಿಶೀಲನೆಯ ಮೇಲೆ ಅವಲಂಬಿತ):",
+    },
+    "scheme_list_footer": {
+        "English": "Reply with a number or scheme name to learn more.",
+        "Hindi": "और जानने के लिए नंबर या योजना का नाम लिखें।",
+        "Marathi": "अधिक जाणून घेण्यासाठी क्रमांक किंवा योजनेचे नाव लिहा.",
+        "Kannada": "ಹೆಚ್ಚು ತಿಳಿಯಲು ಸಂಖ್ಯೆ ಅಥವಾ ಯೋಜನೆಯ ಹೆಸರು ಬರೆಯಿರಿ.",
+    },
+    "scheme_list_empty": {
+        "English": "I couldn’t confidently match schemes from your details yet. You can edit your profile or ask for help and our team can assist.",
+        "Hindi": "आपके विवरण से योजनाएँ पक्के तौर पर नहीं मिल सकीं। प्रोफ़ाइल बदलें, या मदद माँगें।",
+        "Marathi": "तुमच्या माहितीवरून योजना खात्रीने जुळल्या नाहीत. प्रोफाइल बदला, किंवा मदत मागा.",
+        "Kannada": "ನಿಮ್ಮ ವಿವರಗಳಿಂದ ಯೋಜನೆಗಳನ್ನು ಖಚಿತವಾಗಿ ಹೊಂದಿಸಲಾಗಲಿಲ್ಲ. ಪ್ರೊಫೈಲ್ ಬದಲಾಯಿಸಿ, ಅಥವಾ ಸಹಾಯ ಕೇಳಿ.",
+    },
+    "scheme_detail_back": {
+        "English": "Reply *help* for support, or *other schemes* to go back to the list.",
+        "Hindi": "सहायता के लिए *help*, या सूची के लिए *other schemes* लिखें।",
+        "Marathi": "मदतीसाठी *help*, किंवा यादीसाठी *other schemes* लिहा.",
+        "Kannada": "ಸಹಾಯಕ್ಕೆ *help*, ಅಥವಾ ಪಟ್ಟಿಗೆ *other schemes* ಬರೆಯಿರಿ.",
+    },
+    "named_field_name": {
+        "English": "Name",
+        "Hindi": "नाम",
+        "Marathi": "नाव",
+        "Kannada": "ಹೆಸರು",
+    },
+    "named_field_about": {
+        "English": "About",
+        "Hindi": "परिचय",
+        "Marathi": "माहिती",
+        "Kannada": "ಬಗ್ಗೆ",
+    },
+    "named_field_eligibility": {
+        "English": "Eligibility",
+        "Hindi": "पात्रता",
+        "Marathi": "पात्रता",
+        "Kannada": "ಅರ್ಹತೆ",
+    },
+    "named_field_apply": {
+        "English": "Apply / more info",
+        "Hindi": "आवेदन / अधिक जानकारी",
+        "Marathi": "अर्ज / अधिक माहिती",
+        "Kannada": "ಅರ್ಜಿ / ಹೆಚ್ಚಿನ ಮಾಹಿತಿ",
+    },
+    "named_library_note": {
+        "English": "This is from the SETU scheme library only — please re-verify on the official site.",
+        "Hindi": "यह केवल SETU योजना सूची से है — आधिकारिक साइट पर जाँच लें।",
+        "Marathi": "ही माहिती केवळ SETU योजना यादीतील आहे — अधिकृत संकेतस्थळावर पडताळा.",
+        "Kannada": "ಇದು SETU ಯೋಜನಾ ಗ್ರಂಥಾಲಯದಿಂದ ಮಾತ್ರ — ಅಧಿಕೃತ ತಾಣದಲ್ಲಿ ಮರುಪರಿಶೀಲಿಸಿ.",
+    },
+    "scope_central_plus": {
+        "English": "Matching Central + {state} schemes.",
+        "Hindi": "केंद्र + {state} योजनाएँ देख रहे हैं।",
+        "Marathi": "केंद्र + {state} योजना जुळवत आहोत.",
+        "Kannada": "ಕೇಂದ್ರ + {state} ಯೋಜನೆಗಳನ್ನು ಹೊಂದಿಸುತ್ತಿದ್ದೇವೆ.",
+    },
+    "scope_central_only": {
+        "English": "Matching Central schemes only.",
+        "Hindi": "केवल केंद्र योजनाएँ देख रहे हैं।",
+        "Marathi": "फक्त केंद्र योजना जुळवत आहोत.",
+        "Kannada": "ಕೇಂದ್ರ ಯೋಜನೆಗಳನ್ನು ಮಾತ್ರ ಹೊಂದಿಸುತ್ತಿದ್ದೇವೆ.",
+    },
+    "scope_karnataka_only": {
+        "English": "Matching Karnataka schemes.",
+        "Hindi": "कर्नाटक योजनाएँ देख रहे हैं।",
+        "Marathi": "कर्नाटक योजना जुळवत आहोत.",
+        "Kannada": "ಕರ್ನಾಟಕ ಯೋಜನೆಗಳನ್ನು ಹೊಂದಿಸುತ್ತಿದ್ದೇವೆ.",
+    },
+    "scope_maharashtra_only": {
+        "English": "Matching Maharashtra schemes.",
+        "Hindi": "महाराष्ट्र योजनाएँ देख रहे हैं।",
+        "Marathi": "महाराष्ट्र योजना जुळवत आहोत.",
+        "Kannada": "ಮಹಾರಾಷ್ಟ್ರ ಯೋಜನೆಗಳನ್ನು ಹೊಂದಿಸುತ್ತಿದ್ದೇವೆ.",
+    },
+    "scope_state_only": {
+        "English": "Matching {state} schemes.",
+        "Hindi": "{state} योजनाएँ देख रहे हैं।",
+        "Marathi": "{state} योजना जुळवत आहोत.",
+        "Kannada": "{state} ಯೋಜನೆಗಳನ್ನು ಹೊಂದಿಸುತ್ತಿದ್ದೇವೆ.",
+    },
+    "scope_central_unset": {
+        "English": "Matching Central schemes (state not set).",
+        "Hindi": "केंद्र योजनाएँ देख रहे हैं (राज्य नहीं चुना)।",
+        "Marathi": "केंद्र योजना जुळवत आहोत (राज्य निवडलेले नाही).",
+        "Kannada": "ಕೇಂದ್ರ ಯೋಜನೆಗಳನ್ನು ಹೊಂದಿಸುತ್ತಿದ್ದೇವೆ (ರಾಜ್ಯ ಆಯ್ಕೆಯಾಗಿಲ್ಲ).",
+    },
+    "scope_central_unknown": {
+        "English": "Matching Central schemes only — no dedicated library yet for {state}. Karnataka and Maharashtra state libraries are available.",
+        "Hindi": "केवल केंद्र योजनाएँ — {state} की राज्य सूची अभी नहीं है। कर्नाटक और महाराष्ट्र उपलब्ध हैं।",
+        "Marathi": "फक्त केंद्र योजना — {state} ची राज्य यादी अद्याप नाही. कर्नाटक आणि महाराष्ट्र उपलब्ध आहेत.",
+        "Kannada": "ಕೇಂದ್ರ ಯೋಜನೆಗಳು ಮಾತ್ರ — {state} ರಾಜ್ಯ ಗ್ರಂಥಾಲಯ ಇನ್ನೂ ಇಲ್ಲ. ಕರ್ನಾಟಕ ಮತ್ತು ಮಹಾರಾಷ್ಟ್ರ ಲಭ್ಯವಿವೆ.",
+    },
+    "lib_central": {
+        "English": "Central",
+        "Hindi": "केंद्र",
+        "Marathi": "केंद्र",
+        "Kannada": "ಕೇಂದ್ರ",
+    },
+    "lib_karnataka": {
+        "English": "Karnataka",
+        "Hindi": "कर्नाटक",
+        "Marathi": "कर्नाटक",
+        "Kannada": "ಕರ್ನಾಟಕ",
+    },
+    "lib_maharashtra": {
+        "English": "Maharashtra",
+        "Hindi": "महाराष्ट्र",
+        "Marathi": "महाराष्ट्र",
+        "Kannada": "ಮಹಾರಾಷ್ಟ್ರ",
     },
     "named_list_intro": {
         "English": "I found these matching schemes in the SETU library:",
@@ -501,6 +663,56 @@ def profile_label(slot_id: str, language: str | None, fallback: str | None = Non
     lang = normalize_language(language)
     packed = _LABELS.get(slot_id) or {}
     return packed.get(lang) or packed.get("English") or fallback or slot_id
+
+
+_LIB_KEYS = {
+    "central": "lib_central",
+    "karnataka": "lib_karnataka",
+    "maharashtra": "lib_maharashtra",
+}
+
+_SCOPE_EXACT = {
+    "Matching Central schemes only.": "scope_central_only",
+    "Matching Karnataka schemes.": "scope_karnataka_only",
+    "Matching Maharashtra schemes.": "scope_maharashtra_only",
+    "Matching Central schemes (state not set).": "scope_central_unset",
+}
+
+
+def library_label(library: str | None, language: str | None) -> str:
+    """Localize Central / Karnataka / Maharashtra tags; unknown names stay as-is."""
+    raw = (library or "").strip()
+    if not raw:
+        return ""
+    key = _LIB_KEYS.get(raw.lower())
+    if key:
+        return t(key, language)
+    return raw
+
+
+def localize_scope_note(note: str, language: str | None) -> str:
+    """Map matcher English scope notes onto session-language chrome."""
+    text = (note or "").strip()
+    if not text:
+        return ""
+    lang = normalize_language(language)
+    key = _SCOPE_EXACT.get(text)
+    if key:
+        return t(key, lang)
+    plus = re.fullmatch(r"Matching Central \+ (.+) schemes\.", text)
+    if plus:
+        return t("scope_central_plus", lang, state=library_label(plus.group(1), lang))
+    unknown = re.fullmatch(
+        r"Matching Central schemes only — no dedicated library yet for (.+)\. "
+        r"Karnataka and Maharashtra state libraries are available\.",
+        text,
+    )
+    if unknown:
+        return t("scope_central_unknown", lang, state=library_label(unknown.group(1), lang))
+    state_only = re.fullmatch(r"Matching (.+) schemes\.", text)
+    if state_only:
+        return t("scope_state_only", lang, state=library_label(state_only.group(1), lang))
+    return text
 
 
 def language_instruction(language: str | None) -> str:
