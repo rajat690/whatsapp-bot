@@ -31,6 +31,10 @@ def default_session() -> dict[str, Any]:
         "who_options": [],
         "outbound": None,
         "pack_preset": None,
+        "known_profile": {},
+        "parked": None,
+        "prompted_slots": [],
+        "collect_slot_id": None,
     }
 
 

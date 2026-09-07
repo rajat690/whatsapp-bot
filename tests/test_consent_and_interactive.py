@@ -74,7 +74,51 @@ class ConsentGateTests(unittest.TestCase):
         self.assertEqual(session["phase"], "cat_hub")
         self.assertIn("Education", reply)
 
-    def test_button_accept_id_is_understood(self):
+    def test_consent_body_and_buttons_follow_session_language(self):
+        cases = (
+            ("Hindi", "योजना", "स्वीकार", "Do you accept?"),
+            ("Marathi", "योजना", "स्वीकारा", "Do you accept?"),
+            ("Kannada", "ಯೋಜನೆ", "ಒಪ್ಪುತ್ತೇನೆ", "Do you accept?"),
+        )
+        for lang, needle, accept_title, english in cases:
+            uid = f"consent-lang-{lang}"
+            reset_session(uid)
+            handle_message(uid, "hi")
+            handle_message(uid, lang)
+            handle_message(uid, "individual schemes")
+            reply = handle_message(uid, "Karnataka")
+            session = get_session(uid)
+            self.assertEqual(session["language"], lang)
+            self.assertEqual(session["phase"], "consent")
+            self.assertIn(needle, reply)
+            self.assertNotIn(english, reply)
+            titles = [row["title"] for row in (session.get("outbound") or {}).get("options") or []]
+            self.assertTrue(any(accept_title in t for t in titles), msg=titles)
+            self.assertNotIn("Accept", titles)
+
+    def test_karnataka_does_not_switch_language_to_kannada(self):
+        uid = "consent-ka-state"
+        reset_session(uid)
+        handle_message(uid, "English")
+        handle_message(uid, "individual schemes")
+        reply = handle_message(uid, "Karnataka")
+        session = get_session(uid)
+        self.assertEqual(session["language"], "English")
+        self.assertEqual(session["phase"], "consent")
+        self.assertIn("Do you accept?", reply)
+
+    def test_language_switch_on_consent_rerenders(self):
+        uid = "consent-switch"
+        reset_session(uid)
+        handle_message(uid, "English")
+        handle_message(uid, "individual schemes")
+        handle_message(uid, "Karnataka")
+        self.assertEqual(get_session(uid)["phase"], "consent")
+        reply = handle_message(uid, "shift to hindi")
+        self.assertEqual(get_session(uid)["language"], "Hindi")
+        self.assertEqual(get_session(uid)["phase"], "consent")
+        self.assertIn("योजना", reply)
+        self.assertNotIn("Do you accept?", reply)
         uid = "consent-id"
         reset_session(uid)
         handle_message(uid, "English")

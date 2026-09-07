@@ -9,6 +9,7 @@ from setu import catalog_i18n, category_catalog as cat
 from setu import eligibility, i18n, lookup, translate
 from setu.orchestrator import handle_message
 from setu.session import get_session, reset_session
+from tests.helpers import accept_consent
 
 
 def _walk_to_menu(uid: str, language: str = "English") -> None:
@@ -20,8 +21,9 @@ def _walk_to_menu(uid: str, language: str = "English") -> None:
 def _women_child_q4(uid: str) -> str:
     _walk_to_menu(uid)
     handle_message(uid, "3")
-    handle_message(uid, "1")  # English
+    handle_message(uid, "1")  # Central only
     handle_message(uid, "2")  # Karnataka
+    accept_consent(uid)
     handle_message(uid, "5")  # women & child
     handle_message(uid, "1")
     handle_message(uid, "1")
@@ -97,8 +99,9 @@ class FormatterChromeTests(unittest.TestCase):
         self.assertIn("या योजना उपयुक्त ठरू शकतात", listing)
         self.assertIn("क्रमांक किंवा योजनेचे नाव लिहा", listing)
         self.assertIn("Sukanya Samriddhi Yojana", listing)
-        self.assertIn("High-interest small savings account", listing)
-        self.assertRegex(listing, r"(?m)^1\. ")
+        self.assertNotIn("High-interest small savings account", listing)
+        self.assertNotIn(" — ", listing.split("Sukanya")[1].split("\n")[0] if "Sukanya" in listing else "")
+        self.assertRegex(listing, r"(?m)^1\. Sukanya Samriddhi Yojana \[केंद्र\]$")
         self.assertNotIn("These schemes may be relevant", listing)
         self.assertNotIn("Matching Central + Karnataka", listing)
 
@@ -185,8 +188,9 @@ class LlmTranslationTests(unittest.TestCase):
         ):
             listing = eligibility.format_scheme_list([scheme], language="Marathi")
             detail = eligibility.format_scheme_detail(scheme, language="Marathi")
-        self.assertIn("मराठी:High-interest small", listing)
+        self.assertNotIn("मराठी:High-interest small", listing)
         self.assertIn("Sukanya Samriddhi Yojana", listing)
+        self.assertRegex(listing, r"(?m)^1\. Sukanya Samriddhi Yojana \[केंद्र\]$")
         self.assertIn("मराठी:High-interest small", detail)
         self.assertIn("लाभ:", detail)
         self.assertRegex(listing, r"(?m)^1\. ")
@@ -235,6 +239,7 @@ class MidFlowLanguageSwitchTests(unittest.TestCase):
         handle_message(uid, "3")
         handle_message(uid, "2")
         handle_message(uid, "2")
+        accept_consent(uid)
         reply = handle_message(uid, "5")
         self.assertEqual(get_session(uid)["language"], "Hindi")
         self.assertIn("महिला और बच्चा", reply)
@@ -246,6 +251,7 @@ class MidFlowLanguageSwitchTests(unittest.TestCase):
         handle_message(uid, "3")
         handle_message(uid, "1")
         handle_message(uid, "2")
+        accept_consent(uid)
         handle_message(uid, "5")
         reply = handle_message(uid, "shift to kannada")
         self.assertEqual(get_session(uid)["language"], "Kannada")
@@ -271,7 +277,9 @@ class MidFlowLanguageSwitchTests(unittest.TestCase):
         reply = handle_message(uid, "1")
         self.assertEqual(get_session(uid)["journey_id"], "journey_1")
         self.assertIn("state", reply.lower())
-        for msg in ("Karnataka", "28", "salaried", "25000", "OBC", "married", "no"):
+        handle_message(uid, "Karnataka")
+        accept_consent(uid)
+        for msg in ("28", "salaried", "25000", "OBC"):
             handle_message(uid, msg)
         reply = handle_message(uid, "proceed")
         self.assertEqual(get_session(uid)["phase"], "scheme_list")

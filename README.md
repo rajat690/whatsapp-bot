@@ -12,9 +12,9 @@ Conversation-first WhatsApp prototype for discovering government schemes (Centra
   - Confirmed slots used for matching
   - **Browse by category** is a structured, isolated tree (not LLM profile collection)
 
-**Journey 1 — Individual Schemes:** age, occupation, income, social category, marital status, disability.
+**Journey 1 — Individual Schemes:** after language + state + consent, at most 4 prompted questions (age, occupation, income, social category). Marital/disability are stored if volunteered.
 
-**Journey 2 — Family Schemes:** household size, children under 18, members 60+, family disability, pregnant/breastfeeding, primary occupation, income, housing, ration card, insurance, social category. Counts accept **0**.
+**Journey 2 — Family Schemes:** after consent, at most 4 prompted questions (household size, children under 18, members 60+, income). Other household facts are stored if volunteered. Counts accept **0**.
 
 **Category path (`schemes_by_category_v1`, `path=category`):** menu button 3, or a free-text category keyword (scholarship, pension, housing, … EN/HI). Language → state scope → category hub (skipped when the topic is already known) → ≤4 questions → numbered results. Existing Individual / Family sessions are untouched. A named scheme (Ujjwala, Stree Shakti, …) wins over a category word when both could match.
 
@@ -22,6 +22,9 @@ Conversation-first WhatsApp prototype for discovering government schemes (Centra
 
 - `app.py` — Meta webhook + WhatsApp send
 - `setu/orchestrator.py` — Journey 1 + Journey 2 conversation flow (`session["journey_id"]`); dispatches `path=category` to the isolated handler
+- `setu/conversation_engine.py` — collect budget, interrupts, known_profile, park/resume
+- `setu/greetings.py` — multilingual greeting / activation (not LLM)
+- `ENGINE.md` — turn-loop summary
 - `setu/category_path.py` — Browse-by-category tree (does not reuse Journey 1/2 collect phases)
 - `setu/category_catalog.py` — hubs, ≤4-question packs, best-effort tag keywords
 - `setu/category_intent.py` — free-text category keyword → pack (named-scheme lookup wins when present)
@@ -53,7 +56,7 @@ Same as before:
 Keyword NLU works without an API key. Individual, Family, and category paths:
 
 ```bash
-python -m unittest tests.test_language_and_slots tests.test_category_path tests.test_category_intent tests.test_named_scheme tests.test_consent_and_interactive tests.test_profile_intent
+python -m unittest tests.test_language_and_slots tests.test_category_path tests.test_category_intent tests.test_named_scheme tests.test_consent_and_interactive tests.test_profile_intent tests.test_conversation_engine tests.test_greetings
 ```
 
 ```bash
@@ -74,8 +77,6 @@ for msg in [
     "salaried",
     "around 25000",
     "OBC",
-    "married",
-    "no",
     "proceed",
     "1",
 ]:
@@ -95,14 +96,7 @@ for msg in [
     "5",
     "2",
     "1",
-    "no",
-    "yes",
-    "farmer",
     "10000",
-    "kutcha",
-    "BPL",
-    "no",
-    "SC",
     "proceed",
     "1",
     "go back",

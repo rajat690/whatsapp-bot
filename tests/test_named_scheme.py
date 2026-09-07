@@ -103,7 +103,7 @@ class NamedSchemeFlowTests(unittest.TestCase):
         low = reply.lower()
         self.assertIn("could not find", low)
         self.assertIn("will not guess", low)
-        self.assertNotIn("end chat", low)
+        self.assertEqual(get_session(uid)["phase"], "named_scheme_ask")
         self.assertIn("individual", low)
         self.assertIn("family", low)
 

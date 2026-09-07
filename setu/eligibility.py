@@ -16,6 +16,17 @@ STATE_TO_FILE = {
     "maharashtra": "schemes_maharashtra.json",
 }
 
+_STATE_ALIASES = {
+    "karnataka": "karnataka",
+    "maharashtra": "maharashtra",
+    "maharastra": "maharashtra",
+}
+
+_STATE_DISPLAY = {
+    "karnataka": "Karnataka",
+    "maharashtra": "Maharashtra",
+}
+
 
 def _load_json(name: str) -> dict[str, Any]:
     path = DATA_DIR / name
@@ -42,15 +53,21 @@ def _load_state_library(state: str) -> list[dict[str, Any]]:
     return _load_library(state_file, state)
 
 
+def _canon_state_key(state: str | None) -> str:
+    raw = (state or "").strip()
+    return _STATE_ALIASES.get(raw.lower(), raw.lower())
+
+
 def load_scheme_pool(state: str | None) -> tuple[list[dict[str, Any]], str]:
     """Return schemes to search + a short scope note for the user."""
     central = _load_central()
 
-    state_l = (state or "").strip().lower()
-    state_file = STATE_TO_FILE.get(state_l)
+    key = _canon_state_key(state)
+    state_file = STATE_TO_FILE.get(key)
     if state_file and (DATA_DIR / state_file).exists():
-        state_schemes = _load_state_library(state)
-        note = f"Matching Central + {state} schemes."
+        display = _STATE_DISPLAY.get(key) or (state or "").strip() or key
+        state_schemes = _load_state_library(display)
+        note = f"Matching Central + {display} schemes."
         return central + state_schemes, note
 
     if state:
@@ -392,20 +409,14 @@ def numbered_scheme_lines(
     schemes: list[dict[str, Any]],
     language: str | None = None,
 ) -> list[str]:
-    """Running 1, 2, 3… list — never bullet-only scheme rows."""
+    """Running 1, 2, 3… list — name + [Central|State] only, never a description."""
     lang = i18n.normalize_language(language)
-    benefits = [str(s.get("Benefit") or "") for s in schemes]
-    localized_benefits = translate.translate_many(benefits, lang)
     lines: list[str] = []
     for i, s in enumerate(schemes, 1):
         lib = i18n.library_label(s.get("_library"), lang)
         tag = f" [{lib}]" if lib else ""
         name = s.get("Scheme Name") or "Scheme"
-        benefit = localized_benefits[i - 1]
-        if benefit:
-            lines.append(f"{i}. {name}{tag} — {benefit}")
-        else:
-            lines.append(f"{i}. {name}{tag}")
+        lines.append(f"{i}. {name}{tag}")
     return lines
 
 
@@ -458,7 +469,7 @@ def format_scheme_detail(
         parts.append(f"{i18n.t('scheme_field_more_info', lang)}: {link}")
     parts.append("")
     parts.append(i18n.t("scheme_guidance", lang))
-    parts.append(back_prompt or i18n.t("scheme_detail_back", lang))
+    # What-next / back prompt is a separate WhatsApp message (see interactive.finalize).
     return "\n".join(parts)
 
 

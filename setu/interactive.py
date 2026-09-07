@@ -112,6 +112,10 @@ def options_for_session(session: dict[str, Any]) -> list[tuple[str, str]]:
         return catalog_options(cat.WHO_FIRST, lang)
     if phase == "cat_collect":
         return _category_question_options(session, lang)
+    if phase == "collect_profile":
+        from . import conversation_engine as engine
+
+        return engine.current_slot_options(session)
     if phase == "scheme_detail":
         return after_detail_options(session.get("journey_id"), lang)
     if phase == "cat_detail":
@@ -163,10 +167,12 @@ def named_next_options(session: dict[str, Any], language: str | None) -> list[tu
     keys = session.get("named_next_options") or []
     labels = {
         "another": i18n.t("named_next_another", language),
+        "resume": i18n.t("resume_opt", language),
         "Individual Schemes": i18n.t("named_next_individual", language),
         "Family Schemes": i18n.t("named_next_family", language),
         "Browse by category": i18n.t("named_next_category", language),
         "Main Menu": i18n.t("named_next_menu", language),
+        "End Chat": i18n.t("end_opt_end", language),
     }
     if keys:
         return [(k, labels.get(k, k)) for k in keys]
@@ -189,10 +195,12 @@ def after_detail_options(journey_id: str | None, language: str | None) -> list[t
         return [
             ("I need help", i18n.t("menu_opt_help", language)),
             ("Go Back", i18n.t("after_back", language)),
+            ("End Chat", i18n.t("end_opt_end", language)),
         ]
     return [
         ("I need help", i18n.t("menu_opt_help", language)),
         ("View other schemes", i18n.t("after_other", language)),
+        ("End Chat", i18n.t("end_opt_end", language)),
     ]
 
 
@@ -210,30 +218,93 @@ def _category_question_options(session: dict[str, Any], language: str | None) ->
     return opts
 
 
+DETAIL_MENU_PHASES = frozenset({"named_scheme", "scheme_detail", "cat_detail"})
+
+
 def finalize(session: dict[str, Any], reply: str | None) -> str:
     """Keep numbered fallback in the body; stash interactive spec on the session."""
     text = reply or ""
     options = options_for_session(session)
+    phase = session.get("phase") or ""
+    lang = session.get("language")
+    list_button = clip(i18n.t("interactive_choose", lang), LIST_BUTTON_MAX)
+    option_rows = [{"id": oid, "title": title} for oid, title in options]
+
+    if phase in DETAIL_MENU_PHASES and options:
+        menu_prompt = _short_body(session)
+        session["outbound"] = {
+            "body": text,
+            "options": [],
+            "separate_menu": True,
+            "detail_text": text,
+            "menu_options": option_rows,
+            "list_button": list_button,
+            "followup": {
+                "body": with_numbered_options(menu_prompt, options),
+                "options": option_rows,
+                "list_button": list_button,
+                "short_body": menu_prompt,
+            },
+        }
+        return text
+
     if options:
         text = with_numbered_options(text, options)
     session["outbound"] = {
         "body": text,
-        "options": [{"id": oid, "title": title} for oid, title in options],
-        "list_button": clip(i18n.t("interactive_choose", session.get("language")), LIST_BUTTON_MAX),
+        "options": option_rows,
+        "list_button": list_button,
         "short_body": _short_body(session),
     }
     return text
 
 
+def outbound_sends(message_text: str, outbound: dict | None) -> list[dict[str, Any]]:
+    """Ordered WhatsApp send specs. Detail + What-next are always two sends."""
+    outbound = outbound or {}
+    follow = outbound.get("followup")
+    if outbound.get("separate_menu") or follow:
+        detail = outbound.get("detail_text") or outbound.get("body") or message_text
+        follow = follow or {}
+        menu_opts = follow.get("options") or outbound.get("menu_options") or []
+        menu_prompt = follow.get("short_body") or _default_what_next()
+        menu_body = follow.get("body") or with_numbered_options(
+            menu_prompt,
+            [(str(o.get("id") or ""), str(o.get("title") or "")) for o in menu_opts],
+        )
+        return [
+            {
+                "body": detail,
+                "options": [],
+                "list_button": "Choose",
+                "short_body": "",
+            },
+            {
+                "body": menu_body,
+                "options": menu_opts,
+                "list_button": follow.get("list_button") or outbound.get("list_button") or "Choose",
+                "short_body": menu_prompt,
+            },
+        ]
+    return [
+        {
+            "body": outbound.get("body") or message_text,
+            "options": outbound.get("options") or [],
+            "list_button": outbound.get("list_button") or "Choose",
+            "short_body": outbound.get("short_body") or "",
+        }
+    ]
+
+
+def _default_what_next() -> str:
+    return i18n.t("named_next_intro", "English")
+
+
 def _short_body(session: dict[str, Any]) -> str:
     phase = session.get("phase") or ""
     lang = session.get("language")
-    if phase in ("named_scheme", "named_scheme_ask"):
+    if phase in ("named_scheme", "named_scheme_ask", "scheme_detail", "cat_detail"):
         return i18n.t("named_next_intro", lang)
-    if phase == "scheme_detail":
-        return i18n.t("after_detail_j2" if session.get("journey_id") == "journey_2" else "after_detail_j1", lang)
-    if phase == "cat_detail":
-        return i18n.t("cat_after_detail", lang)
     if phase == "consent":
         return i18n.t("consent_body", lang)
     if phase in ("who_first", "who_clarify"):
