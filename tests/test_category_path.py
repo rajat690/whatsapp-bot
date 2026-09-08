@@ -7,9 +7,10 @@ import unittest
 
 from setu import category_catalog as cat
 from setu import eligibility, nlu
+from setu import i18n
 from setu.orchestrator import handle_message
 from setu.session import get_session, reset_session
-from tests.helpers import accept_consent
+from tests.helpers import accept_consent, assert_no_bare_choose, whatsapp_interactive_views
 
 
 def _walk_to_menu(uid: str, language: str = "English") -> None:
@@ -108,6 +109,14 @@ class CategoryWalkTests(unittest.TestCase):
         reply = handle_message(uid, "Back to categories")
         self.assertEqual(get_session(uid)["phase"], "cat_hub")
         self.assertIn("Education", reply)
+        session = get_session(uid)
+        assert_no_bare_choose(self, session, reply)
+        hub_views = whatsapp_interactive_views(session, reply)
+        self.assertTrue(any("topic" in (v["body"] or "").lower() for v in hub_views))
+        self.assertTrue(any(v["button"] == "choose topic" for v in hub_views))
+        hub_ids = [row["id"] for v in hub_views for row in v["options"]]
+        self.assertIn("pension", hub_ids)
+        self.assertIn("education", hub_ids)
 
     def test_hub_more_and_back(self):
         uid = "cat-hub2"
@@ -319,6 +328,97 @@ class MatcherScopeTests(unittest.TestCase):
         libs = {s.get("_library") for s in schemes}
         self.assertIn("Central", libs)
         self.assertIn("Karnataka", libs)
+
+
+def _to_category_hub(uid: str, language: str = "English") -> str:
+    reset_session(uid)
+    handle_message(uid, "hi")
+    handle_message(uid, language)
+    handle_message(uid, "3")
+    handle_message(uid, "1" if language == "English" else language)
+    handle_message(uid, "2")  # Karnataka
+    return accept_consent(uid) or ""
+
+
+class BackToCategoriesChooseRegressionTests(unittest.TestCase):
+    def test_back_to_categories_then_pension_is_not_choose_loop(self):
+        uid = "cat-choose-loop"
+        _to_category_hub(uid)
+        handle_message(uid, "1")  # education
+        for _ in range(3):
+            handle_message(uid, "1")
+        self.assertEqual(get_session(uid)["phase"], "cat_results")
+        handle_message(uid, "1")
+        self.assertEqual(get_session(uid)["phase"], "cat_detail")
+
+        reply = handle_message(uid, "Back to categories")
+        session = get_session(uid)
+        self.assertEqual(session["phase"], "cat_hub")
+        self.assertIn("Education", reply)
+        self.assertIn("Pension", reply)
+        assert_no_bare_choose(self, session, reply)
+        views = whatsapp_interactive_views(session, reply)
+        self.assertTrue(any("Pick a topic" in v["body"] for v in views))
+        self.assertTrue(any(v["button"] == "choose topic" for v in views))
+        self.assertTrue(any(row["id"] == "pension" for v in views for row in v["options"]))
+
+        reply = handle_message(uid, "Pension")
+        session = get_session(uid)
+        self.assertEqual(session["phase"], "cat_collect", msg=reply)
+        self.assertEqual(session["category_id"], "pension")
+        self.assertNotEqual(session["phase"], "cat_state_scope")
+        self.assertIn("pension", reply.lower())
+        assert_no_bare_choose(self, session, reply)
+        views = whatsapp_interactive_views(session, reply)
+        self.assertTrue(any("pension" in v["body"].lower() for v in views))
+        self.assertTrue(any(v["button"] == "choose pension" for v in views))
+        opt_ids = [row["id"] for v in views for row in v["options"]]
+        self.assertIn("other", opt_ids)
+        self.assertIn("old_age", opt_ids)
+
+        reply = handle_message(uid, "Other")
+        session = get_session(uid)
+        self.assertEqual(session["phase"], "cat_collect")
+        self.assertEqual(session["slots"].get("pension_type"), "other")
+        self.assertIn("age", reply.lower())
+        assert_no_bare_choose(self, session, reply)
+
+    def test_hub_and_state_scope_copy_for_all_languages(self):
+        cases = (
+            ("English", "choose topic", "choose state"),
+            ("Hindi", "विषय चुनें", "राज्य चुनें"),
+            ("Marathi", "विषय निवडा", "राज्य निवडा"),
+            ("Kannada", "ವಿಷಯ ಆಯ್ಕೆ", "ರಾಜ್ಯ ಆಯ್ಕೆ"),
+        )
+        for lang, topic_btn, state_btn in cases:
+            uid = f"cat-copy-{lang}"
+            reply = _to_category_hub(uid, lang)
+            session = get_session(uid)
+            self.assertEqual(session["phase"], "cat_hub", msg=lang)
+            assert_no_bare_choose(self, session, reply)
+            self.assertEqual((session.get("outbound") or {}).get("list_button"), topic_btn)
+
+            reset_session(uid)
+            handle_message(uid, "hi")
+            handle_message(uid, lang)
+            handle_message(uid, "3")
+            reply = handle_message(uid, "1" if lang == "English" else lang)
+            session = get_session(uid)
+            self.assertEqual(session["phase"], "cat_state_scope", msg=lang)
+            assert_no_bare_choose(self, session, reply)
+            self.assertEqual((session.get("outbound") or {}).get("list_button"), state_btn)
+            self.assertFalse(i18n.is_bare_choose((session.get("outbound") or {}).get("short_body")))
+
+    def test_state_plus_central_from_hub_path_is_not_choose(self):
+        uid = "cat-state-plus"
+        _walk_to_menu(uid)
+        handle_message(uid, "3")
+        handle_message(uid, "1")
+        reply = handle_message(uid, "State + Central")
+        session = get_session(uid)
+        self.assertEqual(session["phase"], "cat_state_plus")
+        assert_no_bare_choose(self, session, reply)
+        self.assertIn("Karnataka", reply)
 
 
 if __name__ == "__main__":

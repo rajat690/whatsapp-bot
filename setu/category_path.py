@@ -224,6 +224,20 @@ def _back_to_hub(session: dict[str, Any]) -> str:
     return _hub_prompt(session)
 
 
+def _option_labels(opt: dict[str, Any] | str, language: str | None) -> list[str]:
+    if isinstance(opt, str):
+        return [cat.label_of(opt, language), cat.label_of(opt, "English"), cat.label_of(opt, "Hindi"), opt]
+    oid = str(opt.get("id") or "")
+    return [
+        oid,
+        cat.label_of(opt, language),
+        cat.label_of(opt, "English"),
+        cat.label_of(opt, "Hindi"),
+        str(opt.get("English") or ""),
+        str(opt.get("Hindi") or ""),
+    ]
+
+
 def _pick(text: str, options: list[dict[str, Any] | str], language: str | None) -> int | None:
     n = nlu._norm(text)
     if not n:
@@ -233,26 +247,17 @@ def _pick(text: str, options: list[dict[str, Any] | str], language: str | None) 
         idx = int(m.group(1)) - 1
         if 0 <= idx < len(options):
             return idx
+    # Exact id/title first so "State + Central" is not stolen by substring "central".
     for i, opt in enumerate(options):
-        if isinstance(opt, str):
-            oid = opt
-            labels = [cat.label_of(opt, language), cat.label_of(opt, "English"), cat.label_of(opt, "Hindi"), oid]
-        else:
-            oid = str(opt.get("id") or "")
-            labels = [
-                oid,
-                cat.label_of(opt, language),
-                cat.label_of(opt, "English"),
-                cat.label_of(opt, "Hindi"),
-                str(opt.get("English") or ""),
-                str(opt.get("Hindi") or ""),
-            ]
-        for lab in labels:
+        for lab in _option_labels(opt, language):
+            lab_n = nlu._norm(lab)
+            if lab_n and n == lab_n:
+                return i
+    for i, opt in enumerate(options):
+        for lab in _option_labels(opt, language):
             lab_n = nlu._norm(lab)
             if not lab_n:
                 continue
-            if n == lab_n:
-                return i
             if len(lab_n) >= 4 and lab_n in n:
                 return i
             if len(n) >= 4 and n in lab_n:

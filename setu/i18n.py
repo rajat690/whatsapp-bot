@@ -414,10 +414,88 @@ _STRINGS: dict[str, dict[str, str]] = {
         "Kannada": "ವರ್ಗಗಳಿಗೆ ಹಿಂದಿರುಗಿ",
     },
     "interactive_choose": {
-        "English": "Choose",
-        "Hindi": "चुनें",
-        "Marathi": "निवडा",
-        "Kannada": "ಆಯ್ಕೆ",
+        "English": "choose option",
+        "Hindi": "विकल्प चुनें",
+        "Marathi": "पर्याय निवडा",
+        "Kannada": "ಆಯ್ಕೆ ಮಾಡಿ",
+    },
+    "interactive_choose_option": {
+        "English": "choose option",
+        "Hindi": "विकल्प चुनें",
+        "Marathi": "पर्याय निवडा",
+        "Kannada": "ಆಯ್ಕೆ ಮಾಡಿ",
+    },
+    "interactive_choose_topic": {
+        "English": "choose topic",
+        "Hindi": "विषय चुनें",
+        "Marathi": "विषय निवडा",
+        "Kannada": "ವಿಷಯ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_who": {
+        "English": "choose who",
+        "Hindi": "किसे चुनें",
+        "Marathi": "कोण निवडा",
+        "Kannada": "ಯಾರು ಆಯ್ಕೆ",
+    },
+    "interactive_choose_next": {
+        "English": "What next",
+        "Hindi": "आगे क्या",
+        "Marathi": "पुढे काय",
+        "Kannada": "ಮುಂದೆ ಏನು",
+    },
+    "interactive_choose_pension_type": {
+        "English": "choose pension",
+        "Hindi": "पेंशन चुनें",
+        "Marathi": "पेन्शन निवडा",
+        "Kannada": "ಪಿಂಚಣಿ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_level": {
+        "English": "choose level",
+        "Hindi": "स्तर चुनें",
+        "Marathi": "पातळी निवडा",
+        "Kannada": "ಹಂತ ಆಯ್ಕೆ",
+    },
+    "interactive_choose_answer": {
+        "English": "choose answer",
+        "Hindi": "जवाब चुनें",
+        "Marathi": "उत्तर निवडा",
+        "Kannada": "ಉತ್ತರ ಆಯ್ಕೆ",
+    },
+    "interactive_section_options": {
+        "English": "Options",
+        "Hindi": "विकल्प",
+        "Marathi": "पर्याय",
+        "Kannada": "ಆಯ್ಕೆಗಳು",
+    },
+    "interactive_section_languages": {
+        "English": "Languages",
+        "Hindi": "भाषाएँ",
+        "Marathi": "भाषा",
+        "Kannada": "ಭಾಷೆಗಳು",
+    },
+    "interactive_section_categories": {
+        "English": "Categories",
+        "Hindi": "श्रेणियाँ",
+        "Marathi": "श्रेणी",
+        "Kannada": "ವರ್ಗಗಳು",
+    },
+    "interactive_section_states": {
+        "English": "States",
+        "Hindi": "राज्य",
+        "Marathi": "राज्य",
+        "Kannada": "ರಾಜ್ಯಗಳು",
+    },
+    "interactive_section_schemes": {
+        "English": "Schemes",
+        "Hindi": "योजनाएँ",
+        "Marathi": "योजना",
+        "Kannada": "ಯೋಜನೆಗಳು",
+    },
+    "welcome_language_prompt": {
+        "English": "Which language would you like to continue in?",
+        "Hindi": "आप किस भाषा में जारी रखना चाहेंगे?",
+        "Marathi": "तुम्ही कोणत्या भाषेत सुरू ठेवू इच्छिता?",
+        "Kannada": "ನೀವು ಯಾವ ಭಾಷೆಯಲ್ಲಿ ಮುಂದುವರಿಸಬೇಕು?",
     },
     "interactive_choose_scheme": {
         "English": "Choose scheme",
@@ -977,6 +1055,58 @@ def t(key: str, language: str | None, **kwargs: str) -> str:
 
 _LANGUAGE_CHOOSE_PHASES = frozenset({"welcome_language", "cat_language"})
 _SCHEME_CHOOSE_PHASES = frozenset({"scheme_list", "cat_results", "named_scheme_list"})
+_STATE_CHOOSE_PHASES = frozenset({"cat_state_scope", "cat_state_plus"})
+_TOPIC_CHOOSE_PHASES = frozenset({"cat_hub"})
+_WHO_CHOOSE_PHASES = frozenset({"cat_who", "who_first", "who_clarify"})
+_NEXT_CHOOSE_PHASES = frozenset({"named_scheme", "named_scheme_ask", "scheme_detail", "cat_detail"})
+
+_SLOT_BUTTON_ALIASES = {
+    "caste": "social_category",
+    "income_annual": "household_income",
+    "housing_income": "household_income",
+    "age_band": "age_group",
+    "ration_level": "ration_card",
+    "insurance_status": "has_insurance",
+    "housing_status": "housing",
+    "who": "who",
+    "health_who": "who",
+    "who_claims": "who",
+    "edu_level": "level",
+    "schol_level": "level",
+    "already_pension": "answer",
+    "board_registered": "answer",
+    "board_state": "state",
+}
+
+_SECTION_BY_PHASE = {
+    "welcome_language": "interactive_section_languages",
+    "cat_language": "interactive_section_languages",
+    "cat_hub": "interactive_section_categories",
+    "cat_who": "interactive_section_categories",
+    "cat_state_scope": "interactive_section_states",
+    "cat_state_plus": "interactive_section_states",
+    "scheme_list": "interactive_section_schemes",
+    "cat_results": "interactive_section_schemes",
+    "named_scheme_list": "interactive_section_schemes",
+}
+
+# Lone placeholder the live WhatsApp list used to emit as both body and button.
+_BARE_CHOOSE = frozenset({"choose", "चुनें", "निवडा", "ಆಯ್ಕೆ"})
+
+
+def is_bare_choose(text: str | None) -> bool:
+    """True when copy is exactly the old 'Choose' stub (any session language)."""
+    return (text or "").strip().casefold() in _BARE_CHOOSE
+
+
+def _choose_key_for_slot(slot_id: str | None) -> str | None:
+    if not slot_id:
+        return None
+    alias = _SLOT_BUTTON_ALIASES.get(slot_id, slot_id)
+    key = f"interactive_choose_{alias}"
+    if key in _STRINGS:
+        return key
+    return None
 
 
 def interactive_list_button(
@@ -985,16 +1115,34 @@ def interactive_list_button(
     phase: str | None = None,
     slot_id: str | None = None,
 ) -> str:
-    """WhatsApp list-button title: language picker, collect slot, scheme list, or generic Choose."""
+    """WhatsApp list-button title: named for the current step, never a lone Choose."""
     if phase in _LANGUAGE_CHOOSE_PHASES:
         return t("interactive_choose_language", language)
     if phase in _SCHEME_CHOOSE_PHASES:
         return t("interactive_choose_scheme", language)
-    if slot_id:
-        key = f"interactive_choose_{slot_id}"
-        if key in _STRINGS:
-            return t(key, language)
-    return t("interactive_choose", language)
+    if phase in _STATE_CHOOSE_PHASES:
+        return t("interactive_choose_state", language)
+    if phase in _TOPIC_CHOOSE_PHASES:
+        return t("interactive_choose_topic", language)
+    if phase in _WHO_CHOOSE_PHASES:
+        return t("interactive_choose_who", language)
+    if phase in _NEXT_CHOOSE_PHASES:
+        return t("interactive_choose_next", language)
+    if phase == "main_menu":
+        return t("interactive_choose_option", language)
+    key = _choose_key_for_slot(slot_id)
+    if key:
+        return t(key, language)
+    return t("interactive_choose_option", language)
+
+
+def interactive_section_title(
+    language: str | None,
+    *,
+    phase: str | None = None,
+) -> str:
+    key = _SECTION_BY_PHASE.get(phase or "") or "interactive_section_options"
+    return t(key, language)
 
 
 def slot_prompt(slot_id: str, language: str | None, fallback: str | None = None) -> str:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 
 from setu.interactive import (
+    LIST_BUTTON_MAX,
     build_interactive_payload,
     parse_inbound_message,
     spec_mode,
@@ -12,7 +13,7 @@ from setu.interactive import (
 from setu import i18n
 from setu.orchestrator import handle_message
 from setu.session import get_session, reset_session
-from tests.helpers import accept_consent
+from tests.helpers import accept_consent, assert_no_bare_choose
 
 
 class ConsentGateTests(unittest.TestCase):
@@ -228,10 +229,11 @@ class LanguageAndIntroCopyTests(unittest.TestCase):
         self.assertEqual(session["phase"], "welcome_language")
         outbound = session.get("outbound") or {}
         self.assertEqual(outbound.get("list_button"), "choose language")
-        self.assertEqual(outbound.get("short_body"), "choose language")
+        self.assertIn("language", (outbound.get("short_body") or "").lower())
+        self.assertNotEqual((outbound.get("short_body") or "").strip(), "Choose")
         self.assertLessEqual(len(outbound.get("list_button") or ""), 20)
 
-    def test_main_menu_keeps_generic_choose(self):
+    def test_main_menu_list_button_says_choose_option(self):
         uid = "copy-menu-btn"
         reset_session(uid)
         handle_message(uid, "hi")
@@ -239,12 +241,13 @@ class LanguageAndIntroCopyTests(unittest.TestCase):
         session = get_session(uid)
         self.assertEqual(session["phase"], "main_menu")
         outbound = session.get("outbound") or {}
-        self.assertEqual(outbound.get("list_button"), "Choose")
+        self.assertEqual(outbound.get("list_button"), "choose option")
+        self.assertNotEqual(outbound.get("list_button"), "Choose")
         handle_message(uid, "switch to hindi")
         session = get_session(uid)
         self.assertEqual(session["language"], "Hindi")
         self.assertEqual(session["phase"], "main_menu")
-        self.assertEqual((session.get("outbound") or {}).get("list_button"), "चुनें")
+        self.assertEqual((session.get("outbound") or {}).get("list_button"), "विकल्प चुनें")
 
     def test_hindi_individual_intro_uses_localized_menu_name(self):
         uid = "copy-hi-intro"
@@ -311,7 +314,8 @@ class CollectListButtonCopyTests(unittest.TestCase):
             handle_message(uid, answer)
         self.assertEqual(get_session(uid)["phase"], "confirm_profile")
         confirm_btn = (get_session(uid).get("outbound") or {}).get("list_button")
-        self.assertEqual(confirm_btn, "Choose")
+        self.assertEqual(confirm_btn, "choose option")
+        self.assertNotEqual(confirm_btn, "Choose")
 
     def test_hindi_collect_age_button_is_localized(self):
         uid = "copy-hi-age-btn"
@@ -368,6 +372,61 @@ class CollectListButtonCopyTests(unittest.TestCase):
             i18n.interactive_list_button("Hindi", phase="collect_profile", slot_id="social_category"),
             "श्रेणी चुनें",
         )
+
+
+class NoBareChooseAuditTests(unittest.TestCase):
+    def test_interactive_list_buttons_never_bare_choose(self):
+        phases = (
+            "welcome_language",
+            "cat_language",
+            "main_menu",
+            "cat_hub",
+            "cat_state_scope",
+            "cat_state_plus",
+            "cat_who",
+            "cat_collect",
+            "collect_profile",
+            "scheme_list",
+            "cat_results",
+            "named_scheme",
+            "scheme_detail",
+            "cat_detail",
+            "who_first",
+        )
+        slots = (
+            None,
+            "age_group",
+            "occupation",
+            "pension_type",
+            "edu_level",
+            "caste",
+        )
+        for lang in i18n.SUPPORTED:
+            for phase in phases:
+                for slot in slots:
+                    label = i18n.interactive_list_button(lang, phase=phase, slot_id=slot)
+                    self.assertFalse(
+                        i18n.is_bare_choose(label),
+                        msg=f"{phase}/{slot}/{lang}: {label!r}",
+                    )
+                    self.assertLessEqual(len(label), LIST_BUTTON_MAX, msg=f"{phase}/{slot}/{lang}")
+                    self.assertTrue(label.strip(), msg=f"{phase}/{slot}/{lang}")
+
+    def test_welcome_menu_and_collect_whatsapp_views_are_not_choose(self):
+        uid = "no-choose-audit"
+        reset_session(uid)
+        handle_message(uid, "hi")
+        assert_no_bare_choose(self, get_session(uid))
+        handle_message(uid, "English")
+        assert_no_bare_choose(self, get_session(uid))
+        handle_message(uid, "1")
+        handle_message(uid, "Karnataka")
+        assert_no_bare_choose(self, get_session(uid))
+        handle_message(uid, "Accept")
+        assert_no_bare_choose(self, get_session(uid))
+        outbound = get_session(uid).get("outbound") or {}
+        self.assertIn("age", (outbound.get("short_body") or "").lower())
+        self.assertEqual(outbound.get("list_button"), "choose age")
 
 
 if __name__ == "__main__":
