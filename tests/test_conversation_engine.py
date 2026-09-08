@@ -53,6 +53,14 @@ class CollectInteractiveTests(unittest.TestCase):
         reply = handle_message(uid, "2")
         self.assertEqual(get_session(uid)["slots"].get("age_group"), "18–59")
         outbound = get_session(uid).get("outbound") or {}
+        gender_ids = [row["id"] for row in outbound.get("options") or []]
+        self.assertEqual(gender_ids, ["Male", "Female", "Prefer not to say"])
+        self.assertEqual(spec_mode(outbound.get("options") or []), "buttons")
+        self.assertIn("gender", reply.lower())
+        self.assertEqual(get_session(uid).get("outbound", {}).get("list_button"), "choose gender")
+        reply = handle_message(uid, "Female")
+        self.assertEqual(get_session(uid)["slots"].get("gender"), "Female")
+        outbound = get_session(uid).get("outbound") or {}
         occ_ids = [row["id"] for row in outbound.get("options") or []]
         self.assertIn("Farmer", occ_ids)
         self.assertIn("Retired", occ_ids)
@@ -78,14 +86,14 @@ class FourQuestionCapTests(unittest.TestCase):
         _start_individual(uid)
         asks = []
         replies = []
-        for msg in ("28", "salaried", "25000", "OBC"):
+        for msg in ("28", "Female", "salaried", "25000"):
             session = get_session(uid)
             self.assertEqual(session["phase"], "collect_profile", msg=msg)
             asks.append(session.get("collect_slot_id"))
             replies.append(handle_message(uid, msg))
         session = get_session(uid)
         self.assertEqual(session["phase"], "confirm_profile")
-        self.assertEqual(asks, ["age_group", "occupation", "household_income", "social_category"])
+        self.assertEqual(asks, ["age_group", "gender", "occupation", "household_income"])
         self.assertNotIn("marital", (replies[-1] or "").lower())
         self.assertIsNone(session["slots"].get("marital_status"))
         self.assertIn("18–59", session["slots"].get("age_group", ""))
@@ -98,9 +106,9 @@ class FourQuestionCapTests(unittest.TestCase):
         uid = "eng-j1-no-fifth"
         _start_individual(uid)
         handle_message(uid, "28")
+        handle_message(uid, "Female")
         handle_message(uid, "farmer")
-        handle_message(uid, "10000")
-        reply = handle_message(uid, "SC")
+        reply = handle_message(uid, "10000")
         session = get_session(uid)
         self.assertEqual(session["phase"], "confirm_profile")
         low = reply.lower()

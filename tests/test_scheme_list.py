@@ -38,7 +38,7 @@ def _to_scheme_list(uid: str) -> str:
     handle_message(uid, "individual schemes")
     handle_message(uid, "Karnataka")
     accept_consent(uid)
-    for msg in ("28", "salaried", "25000", "OBC"):
+    for msg in ("28", "Female", "salaried", "25000"):
         handle_message(uid, msg)
     return handle_message(uid, "proceed")
 
@@ -237,7 +237,7 @@ class SchemeInteractiveOptionsTests(unittest.TestCase):
         handle_message(uid, "2")
         accept_consent(uid)
         handle_message(uid, "1")  # education
-        for _ in range(3):
+        for _ in range(4):
             handle_message(uid, "1")
         session = get_session(uid)
         self.assertEqual(session["phase"], "cat_results")

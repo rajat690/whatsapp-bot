@@ -316,19 +316,42 @@ def _income_hard_incompatible(scheme: dict[str, Any], slots: dict[str, str]) -> 
     return False
 
 
+def _normalize_gender(slots: dict[str, str] | None) -> str:
+    """male | female | prefer_not | '' (unknown). Prefer not to say / Transgender → prefer_not."""
+    raw = ((slots or {}).get("gender") or "").strip().lower()
+    if raw in ("male", "man", "boy"):
+        return "male"
+    if raw in ("female", "woman", "women", "lady", "girl"):
+        return "female"
+    if raw in (
+        "prefer not to say",
+        "prefer_not_to_say",
+        "prefer not",
+        "transgender",
+        "trans",
+    ):
+        return "prefer_not"
+    return raw
+
+
 def _scheme_required_gender(scheme: dict[str, Any]) -> str | None:
     gender_crit = (scheme.get("Gender / Category Criteria") or "").lower()
     age_crit = (scheme.get("Age Criteria") or "").lower()
     category = (scheme.get("Category") or "").lower()
-    if "no gender restriction" in gender_crit:
+    if "no gender restriction" in gender_crit or "no gender bar" in gender_crit:
         return None
     blob = f"{gender_crit} {age_crit} {category}"
     if re.search(
         r"girl child|women only|only (?:for )?women|woman of the household|"
         r"adult woman|women \(pregnant|pregnant and lactating women|"
-        r"woman applicant",
+        r"woman applicant|"
+        r"^women(?:[;,]|\s+and\s+|\s*/\s*|$)|"
+        r"women, girl",
         blob,
     ):
+        return "female"
+    gc = gender_crit.strip()
+    if re.match(r"women(?:[;,]|\s+and\s+|\s*/\s*|$)", gc):
         return "female"
     if re.search(r"\bmen only\b|only (?:for )?men\b|male only", blob):
         return "male"
@@ -336,11 +359,12 @@ def _scheme_required_gender(scheme: dict[str, Any]) -> str | None:
 
 
 def _gender_hard_incompatible(scheme: dict[str, Any], slots: dict[str, str]) -> bool:
+    """Male vs women-only (and the reverse) hard-fails. Prefer not to say does not."""
     required = _scheme_required_gender(scheme)
     if not required:
         return False
-    gender = (slots.get("gender") or "").strip().lower()
-    if not gender:
+    gender = _normalize_gender(slots)
+    if not gender or gender == "prefer_not":
         return False
     if required == "female" and gender == "male":
         return True
@@ -503,6 +527,15 @@ def _score_scheme(scheme: dict[str, Any], slots: dict[str, str]) -> tuple[int, l
             reasons.append("Minority")
 
     # Gender / marital / disability
+    required_gender = _scheme_required_gender(scheme)
+    user_gender = _normalize_gender(slots)
+    if required_gender and user_gender == required_gender:
+        score += 3
+        reasons.append("gender")
+    elif required_gender and user_gender == "prefer_not":
+        # Include gender-gated schemes with a soft down-rank; do not hard-exclude.
+        score -= 2
+        reasons.append("gender-unconfirmed")
     if marital == "widowed" and "widow" in gender_crit:
         score += 5
         reasons.append("widow")
@@ -542,6 +575,10 @@ def _score_scheme(scheme: dict[str, Any], slots: dict[str, str]) -> tuple[int, l
     # Broad useful central/state flagships
     if any(x in name for x in ("pm-kisan", "pmjay", "ayushman", "ujjwala", "jan dhan", "arogya", "gruha jyothi", "anna bhagya", "ladki bahin", "shakti")):
         score += 1
+
+    # Prefer not to say must remain includable (soft down-rank, not a drop).
+    if "gender-unconfirmed" in reasons and score <= 0:
+        score = 1
 
     return score, reasons
 

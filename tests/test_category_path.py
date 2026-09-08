@@ -85,12 +85,13 @@ class CategoryWalkTests(unittest.TestCase):
         reply = handle_message(uid, "1")  # education
         self.assertEqual(get_session(uid)["category_id"], "education")
         self.assertEqual(get_session(uid)["phase"], "cat_collect")
-        self.assertIn("1 of 3", reply)
+        self.assertIn("1 of 4", reply)
         self.assertIn("School", reply)
 
         handle_message(uid, "1")  # school 1-10
         handle_message(uid, "1")  # SC
-        reply = handle_message(uid, "1")  # <1L
+        handle_message(uid, "1")  # <1L
+        reply = handle_message(uid, "1")  # gender Male
         session = get_session(uid)
         self.assertEqual(session["phase"], "cat_results")
         self.assertLessEqual(len(cat.questions_for("education", session["slots"])), 4)
@@ -171,11 +172,14 @@ class CategoryWalkTests(unittest.TestCase):
 
     def test_labour_skips_board_state_when_karnataka_already_chosen(self):
         qs = cat.questions_for("labour_bocw", {"state": "Karnataka"})
-        self.assertEqual([q["id"] for q in qs], ["board_registered", "labour_need", "who_claims"])
+        self.assertEqual(
+            [q["id"] for q in qs],
+            ["board_registered", "labour_need", "who_claims", "gender"],
+        )
         qs_central = cat.questions_for("labour_bocw", {})
         self.assertEqual(
             [q["id"] for q in qs_central],
-            ["board_registered", "labour_need", "who_claims", "board_state"],
+            ["board_registered", "labour_need", "who_claims", "gender"],
         )
 
         uid = "cat-labour"
@@ -186,7 +190,8 @@ class CategoryWalkTests(unittest.TestCase):
         accept_consent(uid)
         handle_message(uid, "10")
         reply = handle_message(uid, "2")  # labour
-        self.assertIn("1 of 3", reply)
+        self.assertIn("1 of 4", reply)
+        handle_message(uid, "1")
         handle_message(uid, "1")
         handle_message(uid, "1")
         reply = handle_message(uid, "1")
@@ -232,7 +237,7 @@ class CategoryWalkTests(unittest.TestCase):
         handle_message(uid, "2")  # Karnataka
         accept_consent(uid)
         handle_message(uid, "1")  # education
-        for _ in range(3):
+        for _ in range(4):
             handle_message(uid, "1")
         self.assertEqual(get_session(uid)["phase"], "cat_results")
         self.assertEqual(get_session(uid)["language"], "Hindi")
@@ -273,7 +278,7 @@ class ExistingJourneyNumberingTests(unittest.TestCase):
         handle_message(uid, "individual schemes")
         handle_message(uid, "Karnataka")
         accept_consent(uid)
-        for msg in ("28", "salaried", "25000", "OBC", "married", "no"):
+        for msg in ("28", "Female", "salaried", "25000"):
             handle_message(uid, msg)
         reply = handle_message(uid, "proceed")
         session = get_session(uid)
@@ -345,7 +350,7 @@ class BackToCategoriesChooseRegressionTests(unittest.TestCase):
         uid = "cat-choose-loop"
         _to_category_hub(uid)
         handle_message(uid, "1")  # education
-        for _ in range(3):
+        for _ in range(4):
             handle_message(uid, "1")
         self.assertEqual(get_session(uid)["phase"], "cat_results")
         handle_message(uid, "1")

@@ -279,7 +279,7 @@ class MidFlowLanguageSwitchTests(unittest.TestCase):
         self.assertIn("state", reply.lower())
         handle_message(uid, "Karnataka")
         accept_consent(uid)
-        for msg in ("28", "salaried", "25000", "OBC"):
+        for msg in ("28", "Female", "salaried", "25000"):
             handle_message(uid, msg)
         reply = handle_message(uid, "proceed")
         self.assertEqual(get_session(uid)["phase"], "scheme_list")

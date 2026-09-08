@@ -164,6 +164,57 @@ WHO_FIRST: list[dict[str, Any]] = [
 ]
 
 
+FEMALE_WHO = frozenset(
+    {"pregnant_lactating", "girl_child", "adult_woman", "mother_infant"}
+)
+
+
+def infer_gender(slots: dict[str, str] | None) -> str | None:
+    """Known or implied gender (women_child who / widow pension). Canonical slot values."""
+    filled = slots or {}
+    if filled.get("gender"):
+        return filled["gender"]
+    who = filled.get("who") or filled.get("health_who") or ""
+    if who in FEMALE_WHO:
+        return "Female"
+    if filled.get("pension_type") == "widow":
+        return "Female"
+    return None
+
+
+def gender_question() -> dict[str, Any]:
+    return {
+        "id": "gender",
+        "English": "Which gender should I use for you?",
+        "Hindi": "कृपया अपना लिंग चुनें।",
+        "Marathi": "कृपया तुमचे लिंग निवडा.",
+        "Kannada": "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಲಿಂಗವನ್ನು ಆಯ್ಕೆಮಾಡಿ.",
+        "options": [
+            {
+                "id": "Male",
+                "English": "Male",
+                "Hindi": "पुरुष",
+                "Marathi": "पुरुष",
+                "Kannada": "ಪುರುಷ",
+            },
+            {
+                "id": "Female",
+                "English": "Female",
+                "Hindi": "महिला",
+                "Marathi": "महिला",
+                "Kannada": "ಮಹಿಳೆ",
+            },
+            {
+                "id": "Prefer not to say",
+                "English": "Prefer not to say",
+                "Hindi": "नहीं बताना",
+                "Marathi": "सांगायचे नाही",
+                "Kannada": "ಹೇಳಲು ಇಷ್ಟವಿಲ್ಲ",
+            },
+        ],
+    }
+
+
 def _opt(oid: str, en: str, hi: str) -> dict[str, str]:
     return {"id": oid, "English": en, "Hindi": hi}
 
@@ -1023,13 +1074,21 @@ def label_of(item: dict[str, Any] | str, language: str | None, catalog: dict[str
 def questions_for(category_id: str, slots: dict[str, str] | None = None) -> list[dict[str, Any]]:
     pack = PACKS.get(category_id) or {}
     questions = list(pack.get("questions") or [])
-    if category_id != "labour_bocw":
+    slots = slots or {}
+    if category_id == "labour_bocw":
+        skip_states = set(pack.get("skip_board_state_if_state_in") or [])
+        state = slots.get("state") or ""
+        if state in skip_states:
+            questions = [q for q in questions if q["id"] != "board_state"]
+    # Gender is a first-class pack ask when unknown. Keep the ≤4 cap: append if
+    # there is room, otherwise replace the last pack question.
+    if infer_gender(slots):
         return questions
-    skip_states = set(pack.get("skip_board_state_if_state_in") or [])
-    state = (slots or {}).get("state") or ""
-    if state in skip_states:
-        return [q for q in questions if q["id"] != "board_state"]
-    return questions
+    gq = gender_question()
+    questions = [q for q in questions if q.get("id") != "gender"]
+    if len(questions) < 4:
+        return questions + [gq]
+    return questions[:-1] + [gq]
 
 
 def pack_ids() -> tuple[str, ...]:

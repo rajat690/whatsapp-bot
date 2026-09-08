@@ -108,10 +108,11 @@ class CategoryIntentWalkTests(unittest.TestCase):
         self.assertEqual(session["phase"], "cat_collect")
         self.assertEqual(session["category_id"], "scholarship")
         self.assertLessEqual(len(cat.questions_for("scholarship", session["slots"])), 4)
-        self.assertIn("1 of 3", reply)
+        self.assertIn("1 of 4", reply)
         self.assertIn("scholarship", reply.lower())
         self.assertNotIn("Pick a topic", reply)
 
+        handle_message(uid, "1")
         handle_message(uid, "1")
         handle_message(uid, "1")
         reply = handle_message(uid, "1")
@@ -153,7 +154,7 @@ class CategoryIntentWalkTests(unittest.TestCase):
         reply = handle_message(uid, "2")
         reply = accept_consent(uid) or reply
         self.assertEqual(get_session(uid)["phase"], "cat_collect")
-        self.assertIn("1 of 3", reply)
+        self.assertIn("1 of 4", reply)
 
         uid = "intent-ration"
         _walk_to_menu(uid)

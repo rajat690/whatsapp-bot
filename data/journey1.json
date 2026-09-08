@@ -32,6 +32,17 @@
       "required": true
     },
     {
+      "id": "gender",
+      "prompt_hint": "Which gender should I use for you?",
+      "type": "enum",
+      "options": [
+        "Male",
+        "Female",
+        "Prefer not to say"
+      ],
+      "required": true
+    },
+    {
       "id": "occupation",
       "prompt_hint": "What best describes your current occupation?",
       "type": "enum",

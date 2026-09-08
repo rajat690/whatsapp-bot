@@ -423,6 +423,16 @@ def _begin_pack(
         packed = session.pop("pack_preset", None) or {}
         if packed:
             session["slots"].update(packed)
+    known = session.get("known_profile") or {}
+    for key in ("gender", "age", "age_group", "occupation", "social_category"):
+        if known.get(key) and not session["slots"].get(key):
+            session["slots"][key] = known[key]
+    inferred = cat.infer_gender(session["slots"])
+    if inferred:
+        session["slots"]["gender"] = inferred
+        from . import conversation_engine as engine
+
+        engine.merge_known_profile(session, {"gender": inferred})
     session["category_id"] = category_id
     session["cat_q_index"] = 0
     session["phase"] = "cat_collect"
@@ -465,10 +475,34 @@ def _on_collect(session: dict[str, Any], text: str) -> str:
         return _run_match(session)
     q = questions[idx]
     pick = _pick(text, q["options"], session.get("language"))
+    if pick is None and q.get("id") == "gender":
+        guessed = nlu.detect_gender(text, prefer=True)
+        if guessed:
+            for i, opt in enumerate(q.get("options") or []):
+                if str(opt.get("id") or "") == guessed:
+                    pick = i
+                    break
+            if pick is None:
+                session.setdefault("slots", {})["gender"] = guessed
+                session["cat_q_index"] = idx + 1
+                from . import conversation_engine as engine
+
+                engine.merge_known_profile(session, {"gender": guessed})
+                questions = cat.questions_for(category_id, session.get("slots"))
+                if session["cat_q_index"] >= len(questions):
+                    return _run_match(session)
+                return _question_prompt(session)
     if pick is None:
         return i18n.t("cat_pick_number", session.get("language")) + "\n\n" + _question_prompt(session)
     chosen = q["options"][pick]
     session.setdefault("slots", {})[q["id"]] = chosen["id"]
+    inferred = cat.infer_gender(session["slots"])
+    if inferred:
+        session["slots"]["gender"] = inferred
+    if q.get("id") == "gender" or inferred:
+        from . import conversation_engine as engine
+
+        engine.merge_known_profile(session, {"gender": session["slots"].get("gender")})
     session["cat_q_index"] = idx + 1
     # Recompute remaining (labour board_state may skip after state is known)
     questions = cat.questions_for(category_id, session.get("slots"))
