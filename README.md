@@ -30,7 +30,7 @@ Conversation-first WhatsApp prototype for discovering government schemes (Centra
 - `setu/category_catalog.py` — hubs, ≤4-question packs, best-effort tag keywords
 - `setu/category_intent.py` — free-text category keyword → pack (named-scheme lookup wins when present)
 - `setu/nlu.py` — keyword/slot extraction (no LLM required; family counts including 0)
-- `setu/eligibility.py` — deterministic matcher (family-aware scoring for Journey 2; `match_category_schemes` for the category path)
+- `setu/eligibility.py` — deterministic matcher (hard eligibility gates, then soft score; family-aware Journey 2; `match_category_schemes` for the category path)
 - `setu/lookup.py` — named-scheme identity search (Central + Karnataka + Maharashtra)
 - `setu/llm.py` — optional OpenAI-compatible dialogue layer
 - `setu/session.py` — in-memory sessions (reset on process restart)
@@ -57,7 +57,7 @@ Same as before:
 Keyword NLU works without an API key. Individual, Family, and category paths:
 
 ```bash
-python -m unittest tests.test_language_and_slots tests.test_category_path tests.test_category_intent tests.test_named_scheme tests.test_consent_and_interactive tests.test_profile_intent tests.test_conversation_engine tests.test_greetings tests.test_scheme_list
+python -m unittest tests.test_language_and_slots tests.test_category_path tests.test_category_intent tests.test_named_scheme tests.test_consent_and_interactive tests.test_profile_intent tests.test_conversation_engine tests.test_greetings tests.test_scheme_list tests.test_eligibility_hard_gates
 ```
 
 ```bash

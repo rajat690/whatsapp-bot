@@ -122,7 +122,26 @@ CATEGORY_ALIASES = {
     "general": "General",
     "gen": "General",
     "minority": "Minority",
+    "muslim": "Minority",
+    "islam": "Minority",
+    "islamic": "Minority",
+    "christian": "Minority",
+    "sikh": "Minority",
+    "buddhist": "Minority",
+    "jain": "Minority",
+    "parsi": "Minority",
+    "zoroastrian": "Minority",
 }
+
+# Extra profile facts stored alongside journey enums (never prompted).
+PROFILE_EXTRA_SLOTS = frozenset({"age", "gender"})
+
+_EXPLICIT_AGE_RES = (
+    re.compile(r"\b(?:age|aged)\s*(?:is|of)?\s*[:\-]?\s*(\d{1,3})\b", re.I),
+    re.compile(r"\b(?:i am|i'm|im|i\s+m)\s+(\d{1,3})\b", re.I),
+    re.compile(r"\b(\d{1,3})\s*(?:years?|yrs?|yr)\s*old\b", re.I),
+    re.compile(r"\b(\d{1,3})\s*(?:years?|yrs?)\b", re.I),
+)
 
 MARITAL_ALIASES = {
     "unmarried": "Single",
@@ -611,26 +630,72 @@ def detect_disability(text: str) -> str | None:
     return None
 
 
-def detect_age(text: str) -> str | None:
-    mapped = _map_alias(text, AGE_MAP)
-    if mapped:
-        return mapped
-    n = _norm(text)
-    m = re.search(r"\b(\d{1,3})\s*(years?|yrs?|yo|y\.o\.?)?\b", n)
-    if not m:
-        return None
-    age_num = int(m.group(1))
-    # Ignore tiny numbers unless explicit age unit (avoids "1" / rating confusion)
-    has_unit = bool(m.group(2))
-    if not has_unit and age_num < 10:
-        return None
-    if age_num > 120:
+def age_group_from_years(age_num: int) -> str | None:
+    if age_num < 0 or age_num > 120:
         return None
     if age_num < 18:
         return "0–17"
     if age_num < 60:
         return "18–59"
     return "60+"
+
+
+def detect_age_years(text: str, *, prefer: bool = False) -> int | None:
+    """Exact age in years from 'age 54' / 'I am 54' / '50 yr old'.
+
+    Bare numbers (e.g. '28') only count when this is the age question.
+    """
+    n = _norm(text)
+    if not n:
+        return None
+    for pat in _EXPLICIT_AGE_RES:
+        m = pat.search(n)
+        if not m:
+            continue
+        age_num = int(m.group(1))
+        if 0 <= age_num <= 120:
+            return age_num
+    if not prefer:
+        return None
+    mapped = _map_alias(text, AGE_MAP)
+    if mapped:
+        return None
+    m = re.search(r"\b(\d{1,3})\s*(years?|yrs?|yo|y\.o\.?)?\b", n)
+    if not m:
+        return None
+    age_num = int(m.group(1))
+    has_unit = bool(m.group(2))
+    if not has_unit and age_num < 10:
+        return None
+    if age_num > 120:
+        return None
+    return age_num
+
+
+def detect_age(text: str, *, prefer: bool = False) -> str | None:
+    years = detect_age_years(text, prefer=prefer)
+    if years is not None:
+        return age_group_from_years(years)
+    return _map_alias(text, AGE_MAP)
+
+
+def detect_gender(text: str) -> str | None:
+    """Self-identified gender only — not 'girls' as household children."""
+    n = _norm(text)
+    m = re.search(
+        r"\b(?:i am|i'm|im|i\s+m)\s+(?:a\s+)?(transgender|woman|women|female|lady|girl|man|male|boy)\b",
+        n,
+    )
+    if not m:
+        return None
+    token = m.group(1)
+    if token in ("woman", "women", "female", "lady", "girl"):
+        return "Female"
+    if token in ("man", "male", "boy"):
+        return "Male"
+    if token == "transgender":
+        return "Transgender"
+    return None
 
 
 def detect_income(text: str) -> str | None:
@@ -930,7 +995,10 @@ def extract_slots(
         if v:
             found["state"] = v
     elif prefer_slot == "age_group":
-        v = detect_age(text)
+        years = detect_age_years(text, prefer=True)
+        if years is not None:
+            found["age"] = str(years)
+        v = detect_age(text, prefer=True)
         if v:
             found["age_group"] = v
     elif prefer_slot == "occupation":
@@ -996,9 +1064,15 @@ def extract_slots(
     state = detect_state(text)
     if state:
         found["state"] = state
-    age = detect_age(text)
+    years = detect_age_years(text, prefer=prefer_slot == "age_group")
+    if years is not None:
+        found["age"] = str(years)
+    age = detect_age(text, prefer=prefer_slot == "age_group")
     if age:
         found["age_group"] = age
+    gender = detect_gender(text)
+    if gender:
+        found["gender"] = gender
     occ = _map_alias(text, OCCUPATION_ALIASES)
     if occ:
         found["occupation"] = occ
@@ -1043,6 +1117,7 @@ def extract_slots(
     if insurance:
         found["has_insurance"] = insurance
 
+    allowed = set(allowed) | PROFILE_EXTRA_SLOTS
     return {k: v for k, v in found.items() if k in allowed}
 
 

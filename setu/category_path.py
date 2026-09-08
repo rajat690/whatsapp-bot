@@ -481,10 +481,27 @@ def _results_footer(language: str | None) -> str:
     return i18n.t("cat_results_footer", language)
 
 
+def _slots_for_match(session: dict[str, Any]) -> dict[str, str]:
+    """Category answers plus known_profile facts (exact age, minority, …)."""
+    slots = dict(session.get("slots") or {})
+    known = session.get("known_profile") or {}
+    for key in (
+        "age",
+        "age_group",
+        "occupation",
+        "social_category",
+        "gender",
+        "household_income",
+    ):
+        if known.get(key) and not slots.get(key):
+            slots[key] = known[key]
+    return slots
+
+
 def _run_match(session: dict[str, Any]) -> str:
     category_id = session.get("category_id") or ""
     matched, scope_note = eligibility.match_category_schemes(
-        session.get("slots") or {},
+        _slots_for_match(session),
         category_id,
         scope=session.get("state_scope"),
         pension_slice=bool(session.get("pension_slice")),
