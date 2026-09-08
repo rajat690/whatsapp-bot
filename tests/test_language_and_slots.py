@@ -184,9 +184,12 @@ class KeywordJourneyTests(unittest.TestCase):
         handle_message(uid, "Karnataka")
         accept_consent(uid)
         reply = handle_message(uid, "5")
-        self.assertIn("children", reply.lower())
+        self.assertIn("gender", reply.lower())
         self.assertNotIn("ration", reply.lower())
         self.assertNotIn("insurance", reply.lower())
+        reply = handle_message(uid, "Female")
+        self.assertIn("children", reply.lower())
+        self.assertNotIn("ration", reply.lower())
 
     def test_language_switch_persists_on_keyword_path(self):
         uid = "kw-switch"
@@ -203,7 +206,7 @@ class KeywordJourneyTests(unittest.TestCase):
         self.assertNotRegex(reply, r"[\u0900-\u097F]")
         reply = handle_message(uid, "20")
         self.assertEqual(get_session(uid)["language"], "English")
-        self.assertIn("children", reply.lower())
+        self.assertIn("gender", reply.lower())
         self.assertNotRegex(reply, r"[\u0900-\u097F]")
 
     def test_shift_to_kannada_from_hindi_main_menu(self):
@@ -252,7 +255,7 @@ class KeywordJourneyTests(unittest.TestCase):
         handle_message(uid, "individual schemes")
         handle_message(uid, "Karnataka")
         accept_consent(uid)
-        for msg in ("28", "salaried", "25000", "OBC", "married", "no"):
+        for msg in ("28", "Female", "salaried", "25000"):
             handle_message(uid, msg)
         reply = handle_message(uid, "proceed")
         self.assertIn("scheme", reply.lower())
@@ -277,7 +280,12 @@ class LlmRegressionTests(unittest.TestCase):
                 },
                 {
                     "slots": {"household_size": "20"},
-                    "reply": "कुटुंबात 18 वर्षांखालील किती मुले आहेत?",
+                    "reply": "Which gender should I use for you?",
+                    "ready_for_confirm": False,
+                },
+                {
+                    "slots": {"gender": "Female"},
+                    "reply": "How many children under 18 are in the household?",
                     "ready_for_confirm": False,
                 },
                 {
@@ -307,12 +315,16 @@ class LlmRegressionTests(unittest.TestCase):
 
             reply = handle_message(uid, "20")
             self.assertEqual(get_session(uid)["language"], "English")
-            self.assertIn("children", reply.lower())
+            self.assertIn("gender", reply.lower())
             self.assertNotRegex(reply, r"[\u0900-\u097F]")
+
+            reply = handle_message(uid, "Female")
+            self.assertEqual(get_session(uid)["language"], "English")
+            self.assertIn("children", reply.lower())
 
             reply = handle_message(uid, "0")
             self.assertEqual(get_session(uid)["language"], "English")
-            self.assertIn("60", reply)
+            self.assertIn("income", reply.lower())
             self.assertNotIn("ration", reply.lower())
             self.assertNotIn("insurance", reply.lower())
             self.assertLess(reply.count("?"), 2)

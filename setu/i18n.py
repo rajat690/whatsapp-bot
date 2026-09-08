@@ -10,6 +10,7 @@ SUPPORTED = ("English", "Hindi", "Marathi", "Kannada")
 SLOT_TOPICS: dict[str, tuple[str, ...]] = {
     "state": ("state", "rajya", "\u0930\u093e\u091c\u094d\u092f", "\u0cb0\u0cbe\u0c9c\u0ccd\u0caf"),
     "age_group": ("age group", "age", "\u0906\u092f\u0941", "\u0935\u092f\u094b\u0917\u091f", "\u0cb5\u0caf\u0ccb"),
+    "gender": ("gender", "लिंग", "ಲಿಂಗ"),
     "occupation": ("occupation", "what do you do", "\u092a\u0947\u0936\u093e", "\u0935\u094d\u092f\u0935\u0938\u093e\u092f"),
     "household_income": (
         "income",
@@ -50,6 +51,18 @@ _SLOT_PROMPTS: dict[str, dict[str, str]] = {
         "Hindi": "\u0906\u092a \u0915\u093f\u0938 \u0906\u092f\u0941 \u0935\u0930\u094d\u0917 \u092e\u0947\u0902 \u0939\u0948\u0902?",
         "Marathi": "\u0924\u0941\u092e\u094d\u0939\u0940 \u0915\u094b\u0923\u0924\u094d\u092f\u093e \u0935\u092f\u094b\u0917\u091f\u093e\u0924 \u0906\u0939\u093e\u0924?",
         "Kannada": "\u0ca8\u0c80\u0cb5\u0cc1 \u0caf\u0cbe\u0cb5 \u0cb5\u0caf\u0ccb\u0cae\u0cbf\u0ca4\u0cbf\u0caf\u0cb2\u0ccd\u0cb2\u0cbf\u0ca6\u0ccd\u0ca6\u0cc0\u0cb0\u0cbf?",
+    },
+    "gender": {
+        "English": "Which gender should I use for you?",
+        "Hindi": "कृपया अपना लिंग चुनें।",
+        "Marathi": "कृपया तुमचे लिंग निवडा.",
+        "Kannada": "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಲಿಂಗವನ್ನು ಆಯ್ಕೆಮಾಡಿ.",
+    },
+    "gender_member": {
+        "English": "Which gender should I use for that family member?",
+        "Hindi": "कृपया उस परिवार सदस्य का लिंग चुनें।",
+        "Marathi": "कृपया त्या कुटुंब सदस्याचे लिंग निवडा.",
+        "Kannada": "ದಯವಿಟ್ಟು ಆ ಕುಟುಂಬ ಸದಸ್ಯರ ಲಿಂಗವನ್ನು ಆಯ್ಕೆಮಾಡಿ.",
     },
     "occupation": {
         "English": "What best describes your current occupation?",
@@ -522,6 +535,12 @@ _STRINGS: dict[str, dict[str, str]] = {
         "Hindi": "आयु चुनें",
         "Marathi": "वय निवडा",
         "Kannada": "ವಯಸ್ಸು ಆಯ್ಕೆ",
+    },
+    "interactive_choose_gender": {
+        "English": "choose gender",
+        "Hindi": "लिंग चुनें",
+        "Marathi": "लिंग निवडा",
+        "Kannada": "ಲಿಂಗ ಆಯ್ಕೆ",
     },
     "interactive_choose_occupation": {
         "English": "choose profession",
@@ -1067,6 +1086,7 @@ _SLOT_BUTTON_ALIASES = {
     "income_annual": "household_income",
     "housing_income": "household_income",
     "age_band": "age_group",
+    "gender_member": "gender",
     "ration_level": "ration_card",
     "insurance_status": "has_insurance",
     "housing_status": "housing",
@@ -1151,6 +1171,37 @@ def slot_prompt(slot_id: str, language: str | None, fallback: str | None = None)
     lang = normalize_language(language)
     packed = _SLOT_PROMPTS.get(slot_id) or {}
     return packed.get(lang) or packed.get("English") or fallback or slot_id
+
+
+_GENDER_OPTION_LABELS: dict[str, dict[str, str]] = {
+    "Male": {
+        "English": "Male",
+        "Hindi": "पुरुष",
+        "Marathi": "पुरुष",
+        "Kannada": "ಪುರುಷ",
+    },
+    "Female": {
+        "English": "Female",
+        "Hindi": "महिला",
+        "Marathi": "महिला",
+        "Kannada": "ಮಹಿಳೆ",
+    },
+    "Prefer not to say": {
+        "English": "Prefer not to say",
+        "Hindi": "नहीं बताना",
+        "Marathi": "सांगायचे नाही",
+        "Kannada": "ಹೇಳಲು ಇಷ್ಟವಿಲ್ಲ",
+    },
+}
+
+
+def option_label(slot_id: str, value: str, language: str | None = None) -> str:
+    """Localized closed-choice label; falls back to the stored English value."""
+    lang = normalize_language(language)
+    if slot_id in ("gender", "gender_member"):
+        packed = _GENDER_OPTION_LABELS.get(value) or {}
+        return packed.get(lang) or packed.get("English") or value
+    return value
 
 
 def profile_label(slot_id: str, language: str | None, fallback: str | None = None) -> str:

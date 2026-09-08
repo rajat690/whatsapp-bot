@@ -31,7 +31,25 @@ JOURNEY_FILES = {
 MAX_POST_CONSENT_QUESTIONS = 4
 
 # Post-consent asks (state is asked before consent and does not count).
+# Gender is first-class. If it is already known, the original fourth ask
+# (social category / members 60+) stays; otherwise gender takes that slot
+# so women-only / male-only hard gates can fire.
 ASK_PRIORITY: dict[str, tuple[str, ...]] = {
+    "journey_1": (
+        "age_group",
+        "gender",
+        "occupation",
+        "household_income",
+    ),
+    "journey_2": (
+        "household_size",
+        "gender",
+        "children_under_18",
+        "household_income",
+    ),
+}
+
+ASK_PRIORITY_GENDER_KNOWN: dict[str, tuple[str, ...]] = {
     "journey_1": (
         "age_group",
         "occupation",
@@ -151,9 +169,31 @@ def seed_slots_from_known(session: dict[str, Any]) -> dict[str, str]:
     return slots
 
 
-def collect_slot_ids(journey_id: str | None) -> list[str]:
+def ask_priority_for(
+    journey_id: str | None,
+    filled: dict[str, str] | None = None,
+    prompted: list[str] | None = None,
+) -> tuple[str, ...]:
+    """≤4 post-consent asks. Gender replaces the last original ask when unknown.
+
+    If gender was volunteered / seeded (filled but never prompted), keep the
+    original fourth ask (social category / members 60+). Once we have asked
+    gender, do not swap social category back in — that would exceed the cap.
+    """
     key = journey_key(journey_id)
-    priority = list(ASK_PRIORITY.get(key, ASK_PRIORITY["journey_1"]))
+    filled = filled or {}
+    prompted = prompted or []
+    if filled.get("gender") and "gender" not in prompted:
+        return ASK_PRIORITY_GENDER_KNOWN.get(key, ASK_PRIORITY_GENDER_KNOWN["journey_1"])
+    return ASK_PRIORITY.get(key, ASK_PRIORITY["journey_1"])
+
+
+def collect_slot_ids(
+    journey_id: str | None,
+    filled: dict[str, str] | None = None,
+    prompted: list[str] | None = None,
+) -> list[str]:
+    priority = list(ask_priority_for(journey_id, filled, prompted))
     ordered = ["state"]
     for sid in priority[:MAX_POST_CONSENT_QUESTIONS]:
         if sid not in ordered:
@@ -161,14 +201,19 @@ def collect_slot_ids(journey_id: str | None) -> list[str]:
     return ordered
 
 
-def collect_slot_defs(journey: dict[str, Any], journey_id: str | None = None) -> list[dict[str, Any]]:
+def collect_slot_defs(
+    journey: dict[str, Any],
+    journey_id: str | None = None,
+    filled: dict[str, str] | None = None,
+    prompted: list[str] | None = None,
+) -> list[dict[str, Any]]:
     jid = journey_id or journey.get("id")
     if jid == "journey_2_family":
         jid = "journey_2"
     elif jid == "journey_1_individual":
         jid = "journey_1"
     by_id = {s["id"]: s for s in journey.get("slots") or []}
-    return [by_id[sid] for sid in collect_slot_ids(jid) if sid in by_id]
+    return [by_id[sid] for sid in collect_slot_ids(jid, filled, prompted) if sid in by_id]
 
 
 def has_enough_match_profile(slots: dict[str, str] | None) -> bool:
@@ -184,10 +229,11 @@ def missing_collect_slots(
     journey: dict[str, Any],
     slots: dict[str, str] | None,
     journey_id: str | None = None,
+    prompted: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     filled = slots or {}
     missing = []
-    for slot in collect_slot_defs(journey, journey_id):
+    for slot in collect_slot_defs(journey, journey_id, filled, prompted):
         if not filled.get(slot["id"]):
             missing.append(slot)
     # Age + occupation + community is enough to rank; skip leftover budget asks
@@ -200,15 +246,24 @@ def missing_collect_slots(
 
 def current_collect_slot(session: dict[str, Any], journey: dict[str, Any] | None = None) -> dict[str, Any] | None:
     journey = journey or load_journey(session.get("journey_id"))
-    missing = missing_collect_slots(journey, session.get("slots") or {}, session.get("journey_id"))
+    missing = missing_collect_slots(
+        journey,
+        session.get("slots") or {},
+        session.get("journey_id"),
+        session.get("prompted_slots") or [],
+    )
     return missing[0] if missing else None
 
 
-def slot_option_pairs(slot: dict[str, Any] | None) -> list[tuple[str, str]]:
+def slot_option_pairs(
+    slot: dict[str, Any] | None,
+    language: str | None = None,
+) -> list[tuple[str, str]]:
     if not slot:
         return []
     opts = slot.get("options") or []
-    return [(str(o), str(o)) for o in opts]
+    sid = str(slot.get("id") or "")
+    return [(str(o), i18n.option_label(sid, str(o), language)) for o in opts]
 
 
 def current_slot_options(session: dict[str, Any]) -> list[tuple[str, str]]:
@@ -220,7 +275,7 @@ def current_slot_options(session: dict[str, Any]) -> list[tuple[str, str]]:
         journey = load_journey(session.get("journey_id"))
     except OSError:
         return []
-    return slot_option_pairs(current_collect_slot(session, journey))
+    return slot_option_pairs(current_collect_slot(session, journey), session.get("language"))
 
 
 def set_current_slot(session: dict[str, Any], slot: dict[str, Any] | None) -> None:
@@ -235,8 +290,12 @@ def set_current_slot(session: dict[str, Any], slot: dict[str, Any] | None) -> No
         prompted.append(sid)
 
 
-def resolve_option_answer(slot: dict[str, Any] | None, text: str) -> str | None:
-    pairs = slot_option_pairs(slot)
+def resolve_option_answer(
+    slot: dict[str, Any] | None,
+    text: str,
+    language: str | None = None,
+) -> str | None:
+    pairs = slot_option_pairs(slot, language)
     if not pairs:
         return None
     return interactive.pick_by_number_or_id(text, pairs)
@@ -289,7 +348,7 @@ def infer_implied_slots(
 def extract_turn(session: dict[str, Any], journey: dict[str, Any], text: str) -> dict[str, str]:
     """All present slots from this message (option tap, NLU, implied composition)."""
     current = current_collect_slot(session, journey)
-    picked = resolve_option_answer(current, text)
+    picked = resolve_option_answer(current, text, session.get("language"))
     resolved = picked or text
     prefer = current["id"] if current else None
     extracted = nlu.extract_slots(resolved, journey.get("slots") or [], prefer_slot=prefer)
@@ -356,6 +415,7 @@ def heard_you_bits(extracted: dict[str, str], language: str | None = None) -> st
         "state",
         "age",
         "age_group",
+        "gender",
         "occupation",
         "primary_occupation",
         "household_size",
@@ -382,7 +442,8 @@ def heard_you_bits(extracted: dict[str, str], language: str | None = None) -> st
         if key == "primary_occupation" and extracted.get("occupation") == val:
             continue
         label = i18n.profile_label(key, lang, key.replace("_", " "))
-        bits.append(f"{label} {val}")
+        shown = i18n.option_label(key, val, lang)
+        bits.append(f"{label} {shown}")
         seen.add(key)
     return ", ".join(bits)
 
@@ -460,7 +521,9 @@ def _slot_answer_not_interrupt(session: dict[str, Any], text: str) -> bool:
     slot = current_collect_slot(session)
     if not slot:
         return False
-    if resolve_option_answer(slot, text):
+    if resolve_option_answer(slot, text, session.get("language")):
+        return True
+    if slot.get("id") == "gender" and nlu.detect_gender(text, prefer=True):
         return True
     return False
 

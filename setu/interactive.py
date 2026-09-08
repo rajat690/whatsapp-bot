@@ -449,6 +449,8 @@ def _short_body(session: dict[str, Any]) -> str:
         return _category_question_short(session)
     if phase == "collect_profile":
         slot_id = _collect_slot_id(session)
+        if slot_id == "gender" and session.get("gender_subject") == "member":
+            return i18n.slot_prompt("gender_member", lang)
         if slot_id:
             return i18n.slot_prompt(slot_id, lang)
         return i18n.t("interactive_choose_option", lang)

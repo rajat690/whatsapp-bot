@@ -27,6 +27,17 @@
       "required": true
     },
     {
+      "id": "gender",
+      "prompt_hint": "Which gender should I use for you?",
+      "type": "enum",
+      "options": [
+        "Male",
+        "Female",
+        "Prefer not to say"
+      ],
+      "required": true
+    },
+    {
       "id": "children_under_18",
       "prompt_hint": "How many children under 18 are in the household? (0 is fine)",
       "type": "number",

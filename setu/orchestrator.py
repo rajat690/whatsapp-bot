@@ -47,6 +47,7 @@ PROFILE_LABELS = {
         "ration_card": "Ration card",
         "has_insurance": "Health insurance",
         "social_category": "Social category",
+        "gender": "Gender",
     },
 }
 
@@ -98,7 +99,7 @@ def _continue_after_language_switch(session: dict[str, Any]) -> str:
         body = _main_menu(lang)
     elif phase == "collect_profile":
         journey = load_journey(session.get("journey_id"))
-        missing = _missing_slots(journey, session.get("slots") or {})
+        missing = _missing_slots(journey, session.get("slots") or {}, session)
         if missing:
             body = _ask_slot(missing[0], lang, session)
         else:
@@ -161,14 +162,19 @@ def load_journey(journey_id: str | None = None) -> dict[str, Any]:
     return engine.load_journey(journey_id)
 
 
-def _missing_slots(journey: dict[str, Any], slots: dict[str, str]) -> list[dict[str, Any]]:
+def _missing_slots(
+    journey: dict[str, Any],
+    slots: dict[str, str],
+    session: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     """Outstanding collect slots only (state + ≤4 priority). Extra schema slots are opportunistic."""
     jid = journey.get("id")
     if jid == "journey_2_family":
         jid = "journey_2"
     elif jid == "journey_1_individual":
         jid = "journey_1"
-    return engine.missing_collect_slots(journey, slots, jid)
+    prompted = (session or {}).get("prompted_slots") if session is not None else None
+    return engine.missing_collect_slots(journey, slots, jid, prompted)
 
 
 def _profile_summary(
@@ -185,7 +191,8 @@ def _profile_summary(
             continue
         if key == "age_group" and (slots or {}).get("age"):
             continue
-        lines.append(f"• {i18n.profile_label(key, lang, fallback)}: {val}")
+        shown = i18n.option_label(key, val, lang)
+        lines.append(f"• {i18n.profile_label(key, lang, fallback)}: {shown}")
     lines.append("")
     lines.append(i18n.t("profile_confirm", lang))
     return "\n".join(lines)
@@ -503,6 +510,7 @@ def _start_journey(session: dict[str, Any], journey_id: str) -> dict[str, Any]:
     session["prompted_slots"] = []
     session["collect_slot_id"] = None
     engine.seed_slots_from_known(session)
+    session.setdefault("gender_subject", "self")
     return load_journey(journey_id)
 
 
@@ -511,7 +519,10 @@ def _ask_slot(slot: dict[str, Any], language: str | None = None, session: dict[s
     lang = _lang(language=language)
     if session is not None:
         engine.set_current_slot(session, slot)
-    return i18n.slot_prompt(slot["id"], lang, slot.get("prompt_hint"))
+    sid = slot["id"]
+    if sid == "gender" and session and session.get("gender_subject") == "member":
+        sid = "gender_member"
+    return i18n.slot_prompt(sid, lang, slot.get("prompt_hint"))
 
 
 def _heard_prefix(applied: dict[str, str], language: str | None) -> str:
@@ -538,7 +549,7 @@ def _after_collect_facts(
         prefer = current["id"]
     applied = engine.apply_facts(session, extracted, prefer=prefer)
     lang = _lang(session)
-    missing = _missing_slots(journey, session.get("slots") or {})
+    missing = _missing_slots(journey, session.get("slots") or {}, session)
     if not missing:
         session["collect_slot_id"] = None
         gated = _gate_collect_consent(session, None)
@@ -622,7 +633,7 @@ def _end_chat_reply(session: dict[str, Any]) -> str:
 def _resume_collect_prompt(session: dict[str, Any]) -> str:
     lang = _lang(session)
     journey = load_journey(session.get("journey_id"))
-    missing = _missing_slots(journey, session.get("slots") or {})
+    missing = _missing_slots(journey, session.get("slots") or {}, session)
     ack = i18n.t("resume_ack", lang)
     if not missing:
         session["phase"] = "confirm_profile"
@@ -633,7 +644,7 @@ def _resume_collect_prompt(session: dict[str, Any]) -> str:
 
 def _begin_journey_reply(session: dict[str, Any], journey: dict[str, Any], intro: str) -> str:
     lang = _lang(session)
-    missing = _missing_slots(journey, session.get("slots") or {})
+    missing = _missing_slots(journey, session.get("slots") or {}, session)
     if missing and missing[0]["id"] == "state":
         return intro + "\n\n" + _ask_slot(missing[0], lang, session)
     gated = _gate_collect_consent(session, None)
@@ -836,6 +847,7 @@ def _on_who_choice(session: dict[str, Any], text: str) -> str:
     signals = session.get("profile_signals") or {}
     lang = session.get("language")
     if choice == "who_me":
+        session["gender_subject"] = "self"
         pack = profile_intent.pack_for_me(signals)
         if pack:
             extra: dict[str, Any] = {"language": lang}
@@ -845,6 +857,8 @@ def _on_who_choice(session: dict[str, Any], text: str) -> str:
         journey = _start_journey(session, "journey_1")
         return _begin_journey_reply(session, journey, i18n.t("individual_intro", lang))
     if choice == "who_wife":
+        session["gender_subject"] = "member"
+        engine.merge_known_profile(session, {"gender": "Female"})
         return category_path.start_for_category(
             session, "women_child", language=lang, preset={"who": "adult_woman"}
         )
@@ -853,6 +867,7 @@ def _on_who_choice(session: dict[str, Any], text: str) -> str:
         preset = {"who": "girl_child"} if pack == "women_child" else None
         return category_path.start_for_category(session, pack, language=lang, preset=preset)
     if choice == "who_family":
+        session["gender_subject"] = "self"
         journey = _start_journey(session, "journey_2")
         return _begin_journey_reply(session, journey, i18n.t("family_intro", lang))
     if choice == "who_category":
@@ -894,12 +909,12 @@ def _on_consent(session: dict[str, Any], text: str) -> str:
     session["phase"] = "collect_profile"
     if pending:
         journey = load_journey(session.get("journey_id"))
-        missing = _missing_slots(journey, session.get("slots") or {})
+        missing = _missing_slots(journey, session.get("slots") or {}, session)
         if missing:
             engine.set_current_slot(session, missing[0])
         return pending
     journey = load_journey(session.get("journey_id"))
-    missing = _missing_slots(journey, session.get("slots") or {})
+    missing = _missing_slots(journey, session.get("slots") or {}, session)
     if missing:
         return _ask_slot(missing[0], lang, session)
     if session.get("oneshot_profile"):
@@ -912,7 +927,7 @@ def _gate_collect_consent(session: dict[str, Any], pending: str | None) -> str |
     if not consent.should_gate(session):
         return None
     journey = load_journey(session.get("journey_id"))
-    missing = _missing_slots(journey, session.get("slots") or {})
+    missing = _missing_slots(journey, session.get("slots") or {}, session)
     session["pending_after_consent"] = pending
     session["consent_resume"] = "confirm_profile" if not missing else "collect_profile"
     if not missing and not pending:
@@ -992,7 +1007,7 @@ def _conversational_collect(
     if not llm.llm_configured():
         return None
 
-    missing = _missing_slots(journey, session["slots"])
+    missing = _missing_slots(journey, session["slots"], session)
     missing_ids = [m["id"] for m in missing]
     allowed = {s["id"] for s in journey["slots"]}
 
@@ -1006,7 +1021,10 @@ def _conversational_collect(
             "must be integers and may be 0.\n"
         )
     else:
-        count_note = "\nAge group must be exactly one of: 0–17 | 18–59 | 60+.\n"
+        count_note = (
+            "\nAge group must be exactly one of: 0–17 | 18–59 | 60+.\n"
+            "Gender must be exactly one of: Male | Female | Prefer not to say.\n"
+        )
 
     system = (
         SYSTEM_PERSONA
@@ -1411,7 +1429,7 @@ def _handle_message_inner(user_id: str, text: str) -> str:
             return convo
 
         extracted = engine.extract_turn(session, journey, text)
-        missing = _missing_slots(journey, session.get("slots") or {})
+        missing = _missing_slots(journey, session.get("slots") or {}, session)
         lang = session.get("language")
         if not extracted and missing:
             prefix = ""
@@ -1461,7 +1479,7 @@ def _handle_message_inner(user_id: str, text: str) -> str:
             for key in engine.collect_slot_ids(session.get("journey_id")):
                 if key != "state":
                     profile.pop(key, None)
-            missing = _missing_slots(journey, session["slots"])
+            missing = _missing_slots(journey, session["slots"], session)
             ask = missing[0] if missing else None
             if not ask:
                 session["phase"] = "confirm_profile"

@@ -299,9 +299,9 @@ class CollectListButtonCopyTests(unittest.TestCase):
         handle_message(uid, "Accept")
         expected = [
             ("age_group", "choose age", "28"),
+            ("gender", "choose gender", "Female"),
             ("occupation", "choose profession", "salaried"),
             ("household_income", "choose income", "25000"),
-            ("social_category", "choose category", "OBC"),
         ]
         for slot_id, label, answer in expected:
             session = get_session(uid)
@@ -346,6 +346,7 @@ class CollectListButtonCopyTests(unittest.TestCase):
 
         slots = (
             "age_group",
+            "gender",
             "occupation",
             "household_income",
             "social_category",
@@ -371,6 +372,10 @@ class CollectListButtonCopyTests(unittest.TestCase):
         self.assertEqual(
             i18n.interactive_list_button("Hindi", phase="collect_profile", slot_id="social_category"),
             "श्रेणी चुनें",
+        )
+        self.assertEqual(
+            i18n.interactive_list_button("Hindi", phase="collect_profile", slot_id="gender"),
+            "लिंग चुनें",
         )
 
 

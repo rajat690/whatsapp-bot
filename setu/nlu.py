@@ -133,8 +133,52 @@ CATEGORY_ALIASES = {
     "zoroastrian": "Minority",
 }
 
-# Extra profile facts stored alongside journey enums (never prompted).
+# Extra profile facts stored alongside journey enums (age is never a prompted slot).
 PROFILE_EXTRA_SLOTS = frozenset({"age", "gender"})
+
+# Canonical stored values (buttons + slots["gender"] / known_profile).
+GENDER_MALE = "Male"
+GENDER_FEMALE = "Female"
+GENDER_PNTS = "Prefer not to say"
+GENDER_TRANS = "Transgender"  # free-text only; treated like Prefer not to say for hard gates
+GENDER_BUTTON_VALUES = (GENDER_MALE, GENDER_FEMALE, GENDER_PNTS)
+
+GENDER_ALIASES = {
+    "male": GENDER_MALE,
+    "man": GENDER_MALE,
+    "boy": GENDER_MALE,
+    "पुरुष": GENDER_MALE,
+    "मुलगा": GENDER_MALE,
+    "लड़का": GENDER_MALE,
+    "लडका": GENDER_MALE,
+    "ಪುರುಷ": GENDER_MALE,
+    "ಹುಡುಗ": GENDER_MALE,
+    "female": GENDER_FEMALE,
+    "woman": GENDER_FEMALE,
+    "women": GENDER_FEMALE,
+    "lady": GENDER_FEMALE,
+    "girl": GENDER_FEMALE,
+    "महिला": GENDER_FEMALE,
+    "औरत": GENDER_FEMALE,
+    "स्त्री": GENDER_FEMALE,
+    "लड़की": GENDER_FEMALE,
+    "लडकी": GENDER_FEMALE,
+    "मुलगी": GENDER_FEMALE,
+    "ಮಹಿಳೆ": GENDER_FEMALE,
+    "ಹುಡುಗಿ": GENDER_FEMALE,
+    "prefer not to say": GENDER_PNTS,
+    "prefer not": GENDER_PNTS,
+    "rather not say": GENDER_PNTS,
+    "नहीं बताना": GENDER_PNTS,
+    "नही बताना": GENDER_PNTS,
+    "बताना नहीं": GENDER_PNTS,
+    "सांगायचे नाही": GENDER_PNTS,
+    "सांगू इच्छित नाही": GENDER_PNTS,
+    "ಹೇಳಲು ಇಷ್ಟವಿಲ್ಲ": GENDER_PNTS,
+    "ಹೇಳಲಿಚ್ಛಿಸುವುದಿಲ್ಲ": GENDER_PNTS,
+    "transgender": GENDER_TRANS,
+    "trans": GENDER_TRANS,
+}
 
 _EXPLICIT_AGE_RES = (
     re.compile(r"\b(?:age|aged)\s*(?:is|of)?\s*[:\-]?\s*(\d{1,3})\b", re.I),
@@ -679,22 +723,64 @@ def detect_age(text: str, *, prefer: bool = False) -> str | None:
     return _map_alias(text, AGE_MAP)
 
 
-def detect_gender(text: str) -> str | None:
-    """Self-identified gender only — not 'girls' as household children."""
-    n = _norm(text)
+def detect_gender(text: str, *, prefer: bool = False) -> str | None:
+    """Self-identified gender (EN/HI/KN/MR). Bare tokens only when this is the gender ask.
+
+    Canonical values: Male | Female | Prefer not to say.
+    Free-text may also yield Transgender (not a button; treated like Prefer not to say
+    for hard eligibility gates).
+    """
+    raw = text or ""
+    n = _norm(raw)
+    if not n:
+        return None
+
+    if prefer:
+        mapped = _map_alias(raw, GENDER_ALIASES)
+        if mapped:
+            return mapped
+
     m = re.search(
         r"\b(?:i am|i'm|im|i\s+m)\s+(?:a\s+)?(transgender|woman|women|female|lady|girl|man|male|boy)\b",
         n,
     )
-    if not m:
-        return None
-    token = m.group(1)
-    if token in ("woman", "women", "female", "lady", "girl"):
-        return "Female"
-    if token in ("man", "male", "boy"):
-        return "Male"
-    if token == "transgender":
-        return "Transgender"
+    if m:
+        token = m.group(1)
+        if token in ("woman", "women", "female", "lady", "girl"):
+            return GENDER_FEMALE
+        if token in ("man", "male", "boy"):
+            return GENDER_MALE
+        if token == "transgender":
+            return GENDER_TRANS
+
+    if re.search(r"\b(?:i am|i'm|im|i\s+m)\s+(?:a\s+)?house\s*wife\b", n):
+        return GENDER_FEMALE
+
+    # Hindi / Marathi: मैं पुरुष हूँ / मैं महिला हूँ / मी स्त्री आहे
+    if re.search(
+        r"(?:मैं|मै|मी)\s+(?:एक\s+)?(पुरुष|लड़का|लडका|मुलगा)",
+        raw,
+    ):
+        return GENDER_MALE
+    if re.search(
+        r"(?:मैं|मै|मी)\s+(?:एक\s+)?(महिला|औरत|स्त्री|लड़की|लडकी|मुलगी)",
+        raw,
+    ):
+        return GENDER_FEMALE
+
+    # Kannada: ನಾನು ಪುರುಷ / ನಾನು ಮಹಿಳೆ
+    if re.search(r"ನಾನು\s+(?:ಒಬ್ಬಳ?\s+)?(ಪುರುಷ|ಹುಡುಗ)", raw):
+        return GENDER_MALE
+    if re.search(r"ನಾನು\s+(?:ಒಬ್ಬಳು\s+)?(ಮಹಿಳೆ|ಹುಡುಗಿ)", raw):
+        return GENDER_FEMALE
+
+    if prefer and re.search(
+        r"(नहीं बता|बताना नहीं|सांगायचे नाही|सांगू इच्छित नाही|"
+        r"ಹೇಳಲು ಇಷ್ಟವಿಲ್ಲ|ಹೇಳಲಿಚ್ಛಿಸುವುದಿಲ್ಲ|prefer not)",
+        raw,
+        re.I,
+    ):
+        return GENDER_PNTS
     return None
 
 
@@ -1059,6 +1145,10 @@ def extract_slots(
         v = detect_insurance(text, prefer=True)
         if v:
             found["has_insurance"] = v
+    elif prefer_slot == "gender":
+        v = detect_gender(text, prefer=True)
+        if v:
+            found["gender"] = v
 
     # Opportunistic multi-slot fill (safe extractors only)
     state = detect_state(text)
@@ -1070,7 +1160,7 @@ def extract_slots(
     age = detect_age(text, prefer=prefer_slot == "age_group")
     if age:
         found["age_group"] = age
-    gender = detect_gender(text)
+    gender = detect_gender(text, prefer=prefer_slot == "gender")
     if gender:
         found["gender"] = gender
     occ = _map_alias(text, OCCUPATION_ALIASES)
