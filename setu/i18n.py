@@ -315,10 +315,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "Kannada": "ನಿರಾಕರಿಸಿ",
     },
     "consent_declined": {
-        "English": "No problem. I will not collect more personal details. You can return to the Main menu anytime.",
-        "Hindi": "कोई बात नहीं। मैं और व्यक्तिगत जानकारी नहीं पूछूँगा। आप कभी भी मुख्य मेनू पर लौट सकते हैं।",
-        "Marathi": "हरकत नाही. मी आणखी वैयक्तिक माहिती विचारणार नाही. तुम्ही मुख्य मेनूवर परत जाऊ शकता.",
-        "Kannada": "ಪರವಾಗಿಲ್ಲ. ನಾನು ಇನ್ನು ವೈಯಕ್ತಿಕ ವಿವರಗಳನ್ನು ಕೇಳುವುದಿಲ್ಲ. ನೀವು ಮುಖ್ಯ ಮೆನುವಿಗೆ ಹಿಂತಿರುಗಬಹುದು.",
+        "English": "No problem. I will not collect more personal details. You can return to the Main menu anytime, or say hi to start again.",
+        "Hindi": "कोई बात नहीं। मैं और व्यक्तिगत जानकारी नहीं पूछूँगा। आप कभी भी मुख्य मेनू पर लौट सकते हैं, या फिर से शुरू करने के लिए hi लिखें।",
+        "Marathi": "हरकत नाही. मी आणखी वैयक्तिक माहिती विचारणार नाही. तुम्ही मुख्य मेनूवर परत जाऊ शकता, किंवा पुन्हा सुरू करण्यासाठी hi लिहा.",
+        "Kannada": "ಪರವಾಗಿಲ್ಲ. ನಾನು ಇನ್ನು ವೈಯಕ್ತಿಕ ವಿವರಗಳನ್ನು ಕೇಳುವುದಿಲ್ಲ. ನೀವು ಮುಖ್ಯ ಮೆನುವಿಗೆ ಹಿಂತಿರುಗಬಹುದು, ಅಥವಾ ಮತ್ತೆ ಆರಂಭಿಸಲು hi ಎಂದು ಬರೆಯಿರಿ.",
     },
     "consent_unclear": {
         "English": "Please tap *Accept* to continue, or *Decline* to stop sharing details.",
@@ -505,6 +505,12 @@ _STRINGS: dict[str, dict[str, str]] = {
         "Hindi": "योजनाएँ",
         "Marathi": "योजना",
         "Kannada": "ಯೋಜನೆಗಳು",
+    },
+    "welcome_intro": {
+        "English": "Namaste! I'm SETU Sahayak. I can help you find government schemes for you and your family.",
+        "Hindi": "नमस्ते! मैं SETU Sahayak हूँ। मैं आपके और आपके परिवार के लिए सरकारी योजनाएँ खोजने में मदद कर सकता हूँ।",
+        "Marathi": "नमस्कार! मी SETU Sahayak आहे. मी तुमच्या आणि तुमच्या कुटुंबासाठी सरकारी योजना शोधण्यात मदत करू शकतो.",
+        "Kannada": "ನಮಸ್ಕಾರ! ನಾನು SETU Sahayak. ನಿಮಗೆ ಮತ್ತು ನಿಮ್ಮ ಕುಟುಂಬಕ್ಕೆ ಸರ್ಕಾರಿ ಯೋಜನೆಗಳನ್ನು ಹುಡುಕಲು ನಾನು ಸಹಾಯ ಮಾಡುತ್ತೇನೆ.",
     },
     "welcome_language_prompt": {
         "English": "Which language would you like to continue in?",

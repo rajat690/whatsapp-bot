@@ -7,6 +7,7 @@ import unittest
 from setu.interactive import (
     LIST_BUTTON_MAX,
     build_interactive_payload,
+    outbound_sends,
     parse_inbound_message,
     spec_mode,
 )
@@ -129,6 +130,121 @@ class ConsentGateTests(unittest.TestCase):
         self.assertEqual(get_session(uid)["phase"], "consent")
         handle_message(uid, "Accept")
         self.assertEqual(get_session(uid)["consent"], "accepted")
+
+    def test_story_then_karnataka_asks_consent_before_age(self):
+        """hi → English → life story → Schemes for me → Karnataka → consent."""
+        uid = "consent-story"
+        reset_session(uid)
+        handle_message(uid, "hi")
+        handle_message(uid, "English")
+        self.assertEqual(get_session(uid)["phase"], "main_menu")
+        handle_message(uid, "i am a muslim man, my wife pregnant")
+        self.assertEqual(get_session(uid)["phase"], "who_first")
+        handle_message(uid, "Schemes for me")
+        self.assertEqual(get_session(uid)["phase"], "collect_profile")
+        reply = handle_message(uid, "Karnataka")
+        session = get_session(uid)
+        self.assertEqual(session["phase"], "consent")
+        self.assertNotEqual(session.get("consent"), "accepted")
+        self.assertEqual(session["slots"].get("state"), "Karnataka")
+        self.assertNotIn("age_group", session.get("prompted_slots") or [])
+        self.assertNotIn("age", (reply or "").lower())
+        outbound = session.get("outbound") or {}
+        ids = [row["id"] for row in outbound.get("options") or []]
+        self.assertEqual(ids, ["Accept", "Decline"])
+        self.assertEqual(spec_mode(outbound.get("options") or []), "buttons")
+        short = outbound.get("short_body") or ""
+        self.assertIn("accept", short.lower())
+        self.assertNotIn("age", short.lower())
+        sends = outbound_sends(reply, outbound)
+        shown = "\n".join((spec.get("short_body") or spec.get("body") or "") for spec in sends)
+        self.assertIn("accept", shown.lower())
+        button_ids = [row.get("id") for spec in sends for row in (spec.get("options") or [])]
+        self.assertEqual(button_ids, ["Accept", "Decline"])
+
+    def test_unparsed_answer_cannot_skip_consent_for_age(self):
+        uid = "consent-early-return"
+        reset_session(uid)
+        handle_message(uid, "English")
+        handle_message(uid, "individual")
+        session = get_session(uid)
+        session["slots"]["state"] = "Karnataka"
+        session.setdefault("known_profile", {})["state"] = "Karnataka"
+        reply = handle_message(uid, "asdf qwerty")
+        session = get_session(uid)
+        self.assertEqual(session["phase"], "consent")
+        self.assertNotIn("age", reply.lower())
+        ids = [row["id"] for row in (session.get("outbound") or {}).get("options") or []]
+        self.assertEqual(ids, ["Accept", "Decline"])
+
+    def test_yes_and_no_at_consent_still_map(self):
+        uid = "consent-yes"
+        reset_session(uid)
+        handle_message(uid, "English")
+        handle_message(uid, "individual")
+        handle_message(uid, "Karnataka")
+        reply = handle_message(uid, "yes")
+        self.assertEqual(get_session(uid)["consent"], "accepted")
+        self.assertEqual(get_session(uid)["phase"], "collect_profile")
+        self.assertIn("age", reply.lower())
+
+        uid = "consent-no-text"
+        reset_session(uid)
+        handle_message(uid, "English")
+        handle_message(uid, "individual")
+        handle_message(uid, "Karnataka")
+        reply = handle_message(uid, "no")
+        self.assertEqual(get_session(uid)["consent"], "declined")
+        self.assertEqual(get_session(uid)["phase"], "consent_declined")
+        self.assertIn("will not collect", reply.lower())
+        self.assertIn("hi", reply.lower())
+
+    def test_accept_lasts_for_the_conversation_hi_asks_again(self):
+        uid = "consent-once"
+        reset_session(uid)
+        handle_message(uid, "English")
+        handle_message(uid, "individual")
+        handle_message(uid, "Karnataka")
+        handle_message(uid, "Accept")
+        self.assertEqual(get_session(uid)["consent"], "accepted")
+        handle_message(uid, "Main Menu")
+        reply = handle_message(uid, "Individual Schemes")
+        session = get_session(uid)
+        self.assertEqual(session["consent"], "accepted")
+        self.assertNotEqual(session["phase"], "consent")
+        self.assertEqual(session["slots"].get("state"), "Karnataka")
+        self.assertIn("age", reply.lower())
+
+        handle_message(uid, "hi")
+        self.assertIsNone(get_session(uid).get("consent"))
+        handle_message(uid, "English")
+        self.assertEqual(get_session(uid)["phase"], "main_menu")
+        handle_message(uid, "individual")
+        reply = handle_message(uid, "Karnataka")
+        session = get_session(uid)
+        self.assertEqual(session["phase"], "consent")
+        self.assertIsNone(session.get("consent"))
+        ids = [row["id"] for row in (session.get("outbound") or {}).get("options") or []]
+        self.assertEqual(ids, ["Accept", "Decline"])
+        self.assertNotIn("age", reply.lower())
+
+    def test_decline_then_new_journey_asks_consent_again(self):
+        uid = "consent-decline-again"
+        reset_session(uid)
+        handle_message(uid, "English")
+        handle_message(uid, "individual")
+        handle_message(uid, "Karnataka")
+        reply = handle_message(uid, "Decline")
+        self.assertIn("will not collect", reply.lower())
+        self.assertIn("main menu", reply.lower())
+        handle_message(uid, "Main Menu")
+        reply = handle_message(uid, "1")
+        session = get_session(uid)
+        self.assertEqual(session["phase"], "consent")
+        self.assertNotEqual(session.get("consent"), "accepted")
+        ids = [row["id"] for row in (session.get("outbound") or {}).get("options") or []]
+        self.assertEqual(ids, ["Accept", "Decline"])
+        self.assertNotIn("age", reply.lower())
 
 
 class InteractiveInboundTests(unittest.TestCase):

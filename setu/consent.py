@@ -1,4 +1,9 @@
-"""Consent gate after language + state/scope, before further PII or matching."""
+"""Consent gate after language + state/scope, before further PII or matching.
+
+Accept lasts for the rest of the conversation (Main Menu and a later journey
+do not ask again). Decline does not count as Accept. A pure greeting or
+restart wipes the session, so consent is asked again after language and state.
+"""
 
 from __future__ import annotations
 

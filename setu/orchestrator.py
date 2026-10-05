@@ -98,13 +98,17 @@ def _continue_after_language_switch(session: dict[str, Any]) -> str:
     if phase == "main_menu":
         body = _main_menu(lang)
     elif phase == "collect_profile":
-        journey = load_journey(session.get("journey_id"))
-        missing = _missing_slots(journey, session.get("slots") or {}, session)
-        if missing:
-            body = _ask_slot(missing[0], lang, session)
+        gated = _gate_collect_consent(session, None)
+        if gated:
+            body = gated
         else:
-            session["phase"] = "confirm_profile"
-            body = _profile_summary(session["slots"], session.get("journey_id"), lang)
+            journey = load_journey(session.get("journey_id"))
+            missing = _missing_slots(journey, session.get("slots") or {}, session)
+            if missing:
+                body = _ask_slot(missing[0], lang, session)
+            else:
+                session["phase"] = "confirm_profile"
+                body = _profile_summary(session["slots"], session.get("journey_id"), lang)
     elif phase == "confirm_profile":
         body = _profile_summary(session.get("slots") or {}, session.get("journey_id"), lang)
     elif phase == "scheme_list":
@@ -500,6 +504,14 @@ def _handle_named_scheme_intent(session: dict[str, Any], text: str) -> str | Non
 
 def _start_journey(session: dict[str, Any], journey_id: str) -> dict[str, Any]:
     engine.ensure_fields(session)
+    # Consent is once per conversation. An explicit Accept stays, so Main Menu
+    # and a later Individual/Family entry do not ask again. Declined or missing
+    # consent must not be treated as accepted — this journey asks again after
+    # state. A pure greeting / restart wipes the whole session, including Accept.
+    if session.get("consent") != "accepted":
+        session["consent"] = None
+        session["pending_after_consent"] = None
+        session["consent_resume"] = None
     session["path"] = None
     session["journey_id"] = journey_id
     session["phase"] = "collect_profile"
@@ -517,9 +529,20 @@ def _start_journey(session: dict[str, Any], journey_id: str) -> dict[str, Any]:
 def _ask_slot(slot: dict[str, Any], language: str | None = None, session: dict[str, Any] | None = None) -> str:
     """Fallback question used only when the LLM is unavailable or its reply is unusable."""
     lang = _lang(language=language)
+    sid = slot["id"]
+    # State is asked before consent. Any later slot must not be prompted — or
+    # counted in prompted_slots — until the user has accepted.
+    if (
+        session is not None
+        and sid not in engine.PRE_CONSENT_SLOTS
+        and session.get("consent") != "accepted"
+        and consent.should_gate(session)
+    ):
+        gated = _gate_collect_consent(session, None)
+        if gated:
+            return gated
     if session is not None:
         engine.set_current_slot(session, slot)
-    sid = slot["id"]
     if sid == "gender" and session and session.get("gender_subject") == "member":
         sid = "gender_member"
     return i18n.slot_prompt(sid, lang, slot.get("prompt_hint"))
@@ -571,6 +594,26 @@ def _after_collect_facts(
             return (heard + "\n\n" + body) if heard else body
         return (heard + "\n\n" + summary) if heard else summary
 
+    # State may now be known while age/gender/etc. are still open. Show consent
+    # before any post-consent question. Keep the next question for after Accept,
+    # but do not mark that slot prompted until it is actually shown.
+    if consent.should_gate(session):
+        heard = _heard_prefix(applied, lang)
+        question = None
+        if i18n.usable_collect_reply(llm_reply, lang, missing):
+            question = llm_reply.strip()
+        # No LLM line: leave pending empty so Accept asks the slot with the
+        # live session (gender subject, language) and only then counts it.
+        gated = _gate_collect_consent(session, question)
+        if gated:
+            parts: list[str] = []
+            if switched_to:
+                parts.append(i18n.t("language_switch_ack", lang))
+            if heard:
+                parts.append(heard)
+            parts.append(gated)
+            return "\n\n".join(parts)
+
     next_slot = missing[0]
     engine.set_current_slot(session, next_slot)
     parts: list[str] = []
@@ -613,7 +656,7 @@ def _with_resume_hint(session: dict[str, Any], reply: str) -> str:
 def _apply_greeting(session: dict[str, Any]) -> str:
     """Fresh-session activation: language picker, same as a brand-new `hi`."""
     session["phase"] = "welcome_language"
-    return _welcome()
+    return _welcome(session)
 
 
 def _end_chat_reply(session: dict[str, Any]) -> str:
@@ -635,6 +678,9 @@ def _resume_collect_prompt(session: dict[str, Any]) -> str:
     journey = load_journey(session.get("journey_id"))
     missing = _missing_slots(journey, session.get("slots") or {}, session)
     ack = i18n.t("resume_ack", lang)
+    gated = _gate_collect_consent(session, None)
+    if gated:
+        return ack + "\n\n" + gated
     if not missing:
         session["phase"] = "confirm_profile"
         return ack + "\n\n" + _profile_summary(session.get("slots") or {}, session.get("journey_id"), lang)
@@ -699,7 +745,7 @@ def _maybe_category_intent(session: dict[str, Any], text: str) -> str | None:
     lang = session.get("language")
     miss = i18n.t("cat_unknown", lang)
     if session.get("phase") == "welcome_language":
-        return miss + "\n\n" + _welcome()
+        return miss + "\n\n" + _welcome(session)
     if session.get("phase") == "end_menu":
         return miss + "\n\n" + i18n.t("end_menu", lang)
     session["phase"] = "main_menu"
@@ -728,6 +774,9 @@ def _capture_profile_text(session: dict[str, Any], text: str) -> dict[str, str]:
 
 
 def _emit_matches(session: dict[str, Any]) -> str:
+    gated = _gate_collect_consent(session, None)
+    if gated:
+        return gated
     matched, scope_note = eligibility.match_schemes(
         session.get("slots") or {}, journey_id=session.get("journey_id")
     )
@@ -924,6 +973,12 @@ def _on_consent(session: dict[str, Any], text: str) -> str:
 
 
 def _gate_collect_consent(session: dict[str, Any], pending: str | None) -> str | None:
+    if session.get("consent") == "accepted":
+        return None
+    # Already on the consent step. Do not replace the stored resume payload
+    # with the consent prompt itself (callers often gate again after us).
+    if session.get("phase") == "consent":
+        return consent.prompt(session)
     if not consent.should_gate(session):
         return None
     journey = load_journey(session.get("journey_id"))
@@ -953,12 +1008,13 @@ def _on_consent_declined(session: dict[str, Any], text: str) -> str:
     return consent.declined_message(session)
 
 
-def _welcome() -> str:
+def _welcome(session: dict[str, Any] | None = None) -> str:
+    lang = (session or {}).get("language") or "English"
+    intro = i18n.t("welcome_intro", lang)
+    prompt = i18n.t("welcome_language_prompt", lang)
     return interactive.with_numbered_options(
-        "Hi! Welcome to SETU. I can help you discover government schemes "
-        "or get support with an issue.\n\n"
-        "Which language would you like to continue in?",
-        interactive.language_options("English"),
+        f"{intro}\n\n{prompt}",
+        interactive.language_options(lang),
     )
 
 
@@ -1435,6 +1491,9 @@ def _handle_message_inner(user_id: str, text: str) -> str:
             prefix = ""
             if switched_to:
                 prefix = i18n.t("language_switch_ack", lang) + "\n\n"
+            gated = _gate_collect_consent(session, None)
+            if gated:
+                return prefix + gated
             return prefix + i18n.t("didnt_catch", lang) + " " + _ask_slot(missing[0], lang, session)
 
         next_reply = _after_collect_facts(
