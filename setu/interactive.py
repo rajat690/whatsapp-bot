@@ -287,6 +287,66 @@ def scheme_option_rows(
     return rows
 
 
+def _welcome_language_outbound(
+    session: dict[str, Any],
+    reply: str,
+    options: list[tuple[str, str]],
+    option_rows: list[dict[str, str]],
+    list_button: str,
+    section_title: str,
+) -> str:
+    """Language list body includes the SETU Sahayak intro.
+
+    app.py sends short_body as the interactive body whenever options exist, so
+    a language-only short_body hid the intro that lived only in the fallback
+    body. The list short_body is intro + language question. Any extra prefix
+    (for example an unknown topic) is a text message just before that list.
+    """
+    lang = session.get("language") or "English"
+    intro = i18n.t("welcome_intro", lang)
+    prompt = i18n.t("welcome_language_prompt", lang)
+    source = reply or ""
+    if intro not in source:
+        source = f"{intro}\n\n{source}".strip()
+    if prompt not in source:
+        source = f"{source}\n\n{prompt}".strip()
+    text = with_numbered_options(source, options)
+    plain = source
+    cut = plain.rfind(prompt)
+    if cut != -1:
+        plain = plain[:cut].rstrip()
+    visible = f"{intro}\n\n{prompt}"
+    leading = plain.strip()
+    if leading and leading != intro.strip():
+        session["outbound"] = {
+            "body": text,
+            "options": option_rows,
+            "separate_menu": True,
+            "detail_text": leading,
+            "menu_options": option_rows,
+            "list_button": list_button,
+            "section_title": section_title,
+            "short_body": visible,
+            "followup": {
+                "body": with_numbered_options(visible, options),
+                "options": option_rows,
+                "list_button": list_button,
+                "short_body": visible,
+                "section_title": section_title,
+            },
+        }
+        return text
+    # Greeting / restart: one list message. short_body is what WhatsApp shows.
+    session["outbound"] = {
+        "body": text,
+        "options": option_rows,
+        "list_button": list_button,
+        "short_body": visible,
+        "section_title": section_title,
+    }
+    return text
+
+
 def finalize(session: dict[str, Any], reply: str | None) -> str:
     """Keep numbered fallback in the body; stash interactive spec on the session."""
     text = reply or ""
@@ -335,6 +395,16 @@ def finalize(session: dict[str, Any], reply: str | None) -> str:
             "section_title": section_title,
         }
         return text
+
+    if phase == "welcome_language" and options:
+        return _welcome_language_outbound(
+            session,
+            text,
+            options,
+            option_rows,
+            list_button,
+            section_title,
+        )
 
     if options:
         text = with_numbered_options(text, options)
@@ -433,7 +503,12 @@ def _short_body(session: dict[str, Any]) -> str:
     if phase == "main_menu":
         return i18n.t("main_menu_header", lang)
     if phase == "welcome_language":
-        return i18n.t("welcome_language_prompt", lang)
+        # app.py sends short_body as the list body, so the intro must live here.
+        # The full reply body is only the text fallback if the list send fails.
+        lang = lang or "English"
+        intro = i18n.t("welcome_intro", lang)
+        prompt = i18n.t("welcome_language_prompt", lang)
+        return f"{intro}\n\n{prompt}"
     if phase == "cat_language":
         return i18n.t("cat_language_prompt", lang)
     if phase == "cat_state_scope":

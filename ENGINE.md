@@ -9,7 +9,8 @@ Every discovery / collect turn follows this loop. **Rules own gates; the LLM onl
 2. **Greeting / activation** (`setu/greetings.py`)  
    Short lexicon match in English, Hindi, Marathi, Kannada (plus typos, hiya, and 👋/🙏-only).  
    A pure greeting **restarts the whole workflow** (fresh session → language picker), same as a brand-new `hi`.  
-   A greeting that also carries a scheme name, category, or profile story yields to that stronger intent.
+   A greeting that also carries a scheme name, category, or profile story yields to that stronger intent.  
+   WhatsApp shows a short **SETU Sahayak** intro with the language list (`welcome_intro` in en/hi/mr/kn). Before a language is chosen the intro is English. The intro is part of the interactive list body (`short_body`), not only the text fallback.
 
 3. **Scheme detail + What next?**  
    After a named or journey scheme card, WhatsApp gets **two messages**: (1) detail only, (2) “What next?” with interactive options.  
@@ -35,6 +36,15 @@ Every discovery / collect turn follows this loop. **Rules own gates; the LLM onl
 
 9. **known_profile**  
    Survives Individual ↔ Family ↔ Category. Seeded into new journeys. Wiped only on explicit restart (`restart`, `/start`, `start over`).
+
+## Consent (once per conversation)
+
+Consent stays **after** language and state (category path: after state scope) and **before** age, gender, and any other profile question or scheme matching. It is not asked on the language picker or the main menu.
+
+- **Accept** lasts for the rest of this conversation. Main Menu, then Individual, Family, or category again, keeps `consent=accepted` and does not ask a second time. A seeded state skips straight to the first post-consent question.
+- **Decline** is not Accept. A later journey asks again once state is known. The reply still stops collection and points back at the main menu; saying **hi** starts over.
+- A pure greeting or explicit restart (`hi`, `restart`) wipes the session, including Accept, known profile, and state. Consent is asked again after language and state.
+- A turn that learns the state must not ask age (or mark that slot prompted) until Accept. Free-text yes/no at the consent step still maps to Accept/Decline; anything else re-asks.
 
 ## ≤4 post-consent asks
 
